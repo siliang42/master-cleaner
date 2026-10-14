@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/dark-logo.png">
-    <img alt="Master Cleaner" src="assets/logo/standard.png" width="360">
-  </picture>
+  <img alt="Master Cleaner" src="assets/logo/logo-card.png" width="420">
 </p>
 
 <p align="center">
