@@ -1,0 +1,108 @@
+{
+  "name": "master-cleaner",
+  "version": "1.0.0",
+  "description": "Master Cleaner - cross-platform (macOS/Windows/Linux) disk cleaner and optimizer with first-class AI-era residue cleanup.",
+  "author": "Johnny <obanie@qq.com>",
+  "homepage": "https://github.com/siliang42/master-cleaner",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/siliang42/master-cleaner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/siliang42/master-cleaner/issues"
+  },
+  "license": "AGPL-3.0-only",
+  "main": "electron/main.js",
+  "bin": {
+    "mc": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "web",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "DISCLAIMER.md",
+    "SECURITY.md",
+    "THIRD-PARTY-LICENSES.md",
+    "CITATION.cff"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/cli.js serve",
+    "serve": "node dist/cli.js serve",
+    "scan": "node dist/cli.js scan",
+    "clean": "node dist/cli.js clean",
+    "dev:serve": "node --experimental-strip-types src/cli.ts serve",
+    "desktop": "npm run build && electron .",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "cc.ebonex.master-cleaner",
+    "productName": "Master Cleaner",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "web/**/*",
+      "electron/**/*",
+      "package.json",
+      "LICENSE",
+      "NOTICE",
+      "DISCLAIMER.md",
+      "README.md",
+      "SECURITY.md",
+      "THIRD-PARTY-LICENSES.md",
+      "CITATION.cff"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.png"
+    },
+    "dmg": {
+      "title": "${productName} ${version}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "category": "Utility",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png"
+    }
+  }
+}

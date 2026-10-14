@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Master Cleaner</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<script src="/i18n.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand-mini rail-brand">
+    <span class="rail-logo" aria-hidden="true"><img src="/logo-square.png" alt="" draggable="false" /></span>
+    <span class="rail-brand-text"><strong>Master Cleaner</strong><em data-i18n="rail.tagline">磁盘清理 · 优化</em></span>
+  </div>
+  <div class="disk" id="disk">
+    <span class="disk-dot" id="disk-dot" aria-hidden="true"></span>
+    <span id="disk-label" class="disk-text">磁盘</span>
+    <div class="meter" id="disk-meter" role="progressbar" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <span id="disk-used"></span>
+      <span id="disk-reclaim" hidden></span>
+    </div>
+    <span id="disk-free" class="disk-free muted small">—</span>
+    <div class="disk-tip" id="disk-tip" role="tooltip"></div>
+  </div>
+  <div class="topbar-actions">
+    <button id="btn-settings" class="icon-btn" type="button" data-i18n-title="settings.title" data-i18n-aria="settings.title" title="设置">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button id="btn-scan" class="btn btn-primary" data-i18n-title="scan.title" title="扫描可清理的内容">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span data-i18n="scan">扫描</span>
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="rail">
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="scan" role="tab">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/></svg>
+        <span data-i18n="tab.scan">清理</span>
+      </button>
+      <button class="tab" data-view="schedule" role="tab">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span data-i18n="tab.schedule">定时</span>
+      </button>
+      <button class="tab" data-view="vault" role="tab">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
+        <span data-i18n="tab.vault">回收站</span>
+      </button>
+    </nav>
+    <div class="cat-head"><span data-i18n="cat.heading">分类</span><button id="btn-clear-filter" class="linkish" data-i18n="cat.all">全部</button></div>
+    <ul id="cat-list" class="cat-list"></ul>
+    <div class="rail-foot">
+      <div id="os-info" class="muted small">—</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <section id="view-scan" class="view">
+      <div class="stats" id="stats"></div>
+      <div class="result-bar" id="result-bar" hidden>
+        <span class="rb-label muted small" data-i18n="sort.label">排序</span>
+        <div class="segmented" role="group" data-i18n-aria="sort.aria" aria-label="排序方式">
+          <button class="seg sort-btn" type="button" data-key="size"><span data-i18n="sort.size">大小</span><span class="dir"></span></button>
+          <button class="seg sort-btn" type="button" data-key="name"><span data-i18n="sort.name">名称</span><span class="dir"></span></button>
+        </div>
+        <span class="grow"></span>
+        <label class="switch" id="expert-toggle" hidden data-i18n-title="expert.title" title="包含可清理的专家项">
+          <input type="checkbox" id="opt-expert" />
+          <span data-i18n="expertItems">专家项</span>
+        </label>
+      </div>
+      <div id="scan-panel" class="scan-panel" hidden>
+        <div class="scan-top">
+          <span class="scan-spinner" aria-hidden="true"></span>
+          <span class="scan-title" data-i18n="scan.running">正在扫描…</span>
+          <span class="scan-elapsed" id="scan-elapsed">0.0s</span>
+        </div>
+        <div class="scan-track" aria-hidden="true"><span class="scan-fill"></span></div>
+        <ul class="scan-steps" id="scan-steps"></ul>
+      </div>
+      <div id="results" class="results">
+        <div class="empty">
+          <h2 data-i18n="empty.title">开始扫描</h2>
+          <p data-i18n="empty.body">找出缓存、日志、AI 残留、模型、容器、大文件等可释放的空间。默认只勾选可安全重建的内容。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-schedule" class="view" hidden>
+      <h2 class="view-title" data-i18n="schedule.title">定时清理</h2>
+      <p class="muted" data-i18n-html="schedule.intro">按 cron 计划自动清理指定模块。</p>
+      <form id="sched-form" class="card form">
+        <div class="field">
+          <label data-i18n="form.name">名称</label>
+          <input type="text" id="sched-name" data-i18n-value="schedule.defaultName" value="每日 AI 清理" />
+        </div>
+        <div class="field">
+          <label data-i18n="form.freq">频率</label>
+          <select id="sched-preset">
+            <option value="0 4 * * *" data-i18n="preset.daily">每天 04:00</option>
+            <option value="0 */6 * * *" data-i18n="preset.6h">每 6 小时</option>
+            <option value="0 4 * * 0" data-i18n="preset.weekly">每周日 04:00</option>
+            <option value="0 4 1 * *" data-i18n="preset.monthly">每月 1 日 04:00</option>
+            <option value="custom" data-i18n="preset.custom">自定义 cron…</option>
+          </select>
+        </div>
+        <div class="field" id="sched-cron-field" hidden>
+          <label data-i18n="form.cron">cron 表达式</label>
+          <input type="text" id="sched-cron" placeholder="0 4 * * *" />
+        </div>
+        <div class="field">
+          <label data-i18n="form.modules">模块</label>
+          <div id="sched-modules" class="chips"></div>
+        </div>
+        <div class="field">
+          <label data-i18n="form.mode">清理方式</label>
+          <select id="sched-mode">
+            <option value="quarantine" data-i18n="mode.quarantine">安全回收站（可还原）</option>
+            <option value="trash" data-i18n="mode.trash">系统回收站</option>
+            <option value="delete" data-i18n="mode.delete">永久删除</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          <span data-i18n="form.create">创建定时任务</span>
+        </button>
+      </form>
+      <div id="sched-list" class="list"></div>
+    </section>
+
+    <section id="view-vault" class="view" hidden>
+      <h2 class="view-title" data-i18n="vault.title">安全回收站</h2>
+      <p class="muted" data-i18n="vault.intro">清理默认是「移动」而非删除，可随时还原。</p>
+      <div class="row-actions">
+        <button id="btn-purge" class="btn btn-ghost">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
+          <span data-i18n="vault.purge">清理 30 天前的记录</span>
+        </button>
+      </div>
+      <div id="vault-list" class="list"></div>
+    </section>
+  </main>
+</div>
+
+<footer class="legalbar" data-i18n-aria="legal.aria" aria-label="关于与许可">
+  <div class="legalbar-id">
+    <span class="legal-name">Master Cleaner</span>
+    <span id="legal-version" class="legal-chip">v—</span>
+    <span id="legal-license" class="legal-chip">AGPL-3.0</span>
+  </div>
+  <span class="grow"></span>
+  <span id="legal-attrib" class="legal-attrib muted small"></span>
+  <button id="btn-about" class="icon-btn" type="button" data-i18n-title="about.aboutTitle" data-i18n-aria="about.aboutTitle" title="关于 · 许可 · 免责">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
+  </button>
+</footer>
+
+<div id="actionbar" class="actionbar" hidden>
+  <div class="sel">
+    <span id="sel-count">0 项</span>
+    <strong id="sel-size">0 B</strong>
+  </div>
+  <div class="segmented" role="group" data-i18n-aria="actionbar.aria" aria-label="清理方式">
+    <button class="seg active" data-mode="quarantine" data-i18n="seg.quarantine" data-i18n-title="seg.quarantine.title" title="移入安全回收站，可还原">安全回收站</button>
+    <button class="seg" data-mode="trash" data-i18n="seg.trash" data-i18n-title="seg.trash.title" title="移入系统回收站">回收站</button>
+    <button class="seg" data-mode="delete" data-i18n="seg.delete" data-i18n-title="seg.delete.title" title="永久删除（不可恢复）">永久删除</button>
+  </div>
+  <button id="btn-clean" class="btn btn-danger">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
+    <span data-i18n="clean.selected">清理所选</span>
+  </button>
+</div>
+
+<div id="about-modal" class="modal" hidden>
+  <div class="modal-panel about" role="dialog" aria-modal="true" aria-label="关于 Master Cleaner">
+    <div class="modal-head">
+      <h3 data-i18n="about.title">关于 Master Cleaner</h3>
+      <button id="about-close" class="icon-btn" type="button" data-i18n-title="close" data-i18n-aria="close" title="关闭">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="about-body" class="about-body"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden>
+  <span class="toast-ico" aria-hidden="true"></span>
+  <div class="toast-body">
+    <strong class="toast-title"></strong>
+    <span class="toast-msg"></span>
+  </div>
+  <button class="toast-close" type="button" aria-label="关闭">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+  </button>
+</div>
+<div id="settings-modal" class="modal" hidden>
+  <div class="modal-panel settings-panel" role="dialog" aria-modal="true" data-i18n-aria="settings.title" aria-label="设置">
+    <div class="modal-head">
+      <h3 data-i18n="settings.title">设置</h3>
+      <span id="settings-kbd" class="kbd muted small">⌘,</span>
+      <span class="grow"></span>
+      <button id="settings-close" class="icon-btn" type="button" data-i18n-title="close" data-i18n-aria="close" title="关闭">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <div class="set-row">
+        <div class="set-k">
+          <div class="set-label" data-i18n="settings.language">语言</div>
+          <div class="set-hint muted small" data-i18n="settings.languageHint">默认跟随系统语言</div>
+        </div>
+        <div class="segmented" id="lang-seg" role="group" data-i18n-aria="settings.language" aria-label="语言">
+          <button class="seg" type="button" data-lang=""><span data-i18n="settings.auto">跟随系统</span></button>
+          <button class="seg" type="button" data-lang="zh-CN">简体中文</button>
+          <button class="seg" type="button" data-lang="en">English</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="disk-modal" class="modal" hidden>
+  <div class="modal-panel disk-panel" role="dialog" aria-modal="true" data-i18n-aria="disk.details" aria-label="磁盘详情">
+    <div class="modal-head">
+      <h3 data-i18n="disk.details">磁盘详情</h3>
+      <button id="disk-close" class="icon-btn" type="button" data-i18n-title="close" data-i18n-aria="close" title="关闭">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="disk-body">
+      <div class="disk-big" aria-hidden="true"><span id="disk-big-used"></span><span id="disk-big-reclaim" hidden></span></div>
+      <div class="disk-legend" id="disk-legend"></div>
+      <div class="disk-actions">
+        <button id="disk-view-large" class="btn btn-primary" type="button">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/></svg>
+          <span data-i18n="disk.viewLarge">查看大文件</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

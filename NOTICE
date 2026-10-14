@@ -1,0 +1,80 @@
+Master Cleaner — Legal Notices
+==============================
+
+Project:      Master Cleaner (package name: "master-cleaner")
+Copyright:    Copyright (C) 2026 Johnny <obanie@qq.com> and contributors.
+License:      GNU Affero General Public License v3.0 only (AGPL-3.0-only)
+Contact:      obanie@qq.com
+Project home: https://github.com/siliang42/master-cleaner
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3 of the License. This program is distributed in
+the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+the GNU Affero General Public License, included in the file LICENSE, for the
+full terms.
+
+
+=== Additional Terms under AGPLv3 Section 7 ===
+
+Pursuant to Section 7 of the GNU Affero General Public License version 3, the
+following additional terms apply to this Program. These terms are permitted by
+AGPLv3 Section 7 and do not remove or replace any freedom granted by AGPLv3.
+
+1. Attribution must be preserved (Section 7(b)).
+   Modified versions must preserve the author attribution notice
+
+       "Designed and developed by the Master Cleaner authors and contributors.
+        Copyright (C) 2026 Johnny <obanie@qq.com>."
+
+   in the Appropriate Legal Notices and in any prominent about, legal, footer,
+   or attribution location presented by the user interface. You may translate
+   the notice, but its meaning and the copyright holder must not be altered.
+
+2. Visible link to the original project (Section 7(b)).
+   Modified versions that present a user interface must also preserve a visible
+   link to the original project in a prominent about, legal, footer, or
+   attribution location:
+
+       https://github.com/siliang42/master-cleaner
+
+3. Mark your changes (Section 7(c)).
+   Modified versions must carry prominent notices stating that they have been
+   changed, and must not misrepresent the origin of the software.
+
+4. No trademark license (Section 7(d)).
+   These terms do not grant any right to use the trade names, trademarks,
+   service marks, or product names of the copyright holders, except as required
+   for reasonable and customary use in describing the origin of the Program and
+   reproducing the notices above.
+
+These additional terms are not an exhaustive list of your obligations under
+AGPLv3. Where these terms and AGPLv3 conflict, AGPLv3 controls.
+
+
+=== Network Use and Source Offer (AGPLv3 Section 13) ===
+
+If you modify this Program and make it available to users over a network, you
+must offer those users the Corresponding Source of your modified version, as
+required by AGPLv3 Section 13. Providing a visible "Source" link in the user
+interface is the recommended way to satisfy this obligation.
+
+
+=== Third-Party Components ===
+
+This product may include or depend on third-party open-source software.
+Copyright notices and license terms for those components are listed in
+THIRD-PARTY-LICENSES.md and must be preserved with any distribution.
+
+
+=== 中文摘要（仅供参考，以英文与 AGPLv3 原文为准） ===
+
+本项目 Master Cleaner 采用 GNU Affero 通用公共许可证第 3 版（仅此版本）授权，
+版权归 Johnny <obanie@qq.com> 及贡献者所有。依据 AGPLv3 第 7 条，我们
+附加以下合理条款：任何修改版本都必须保留上述作者署名信息，并在其用户界面中
+显著位置保留指向原始项目的可见链接；修改版本必须标注其已被修改，不得歪曲
+软件来源；本许可不授予任何商标使用权。若你将修改后的版本作为网络服务提供给
+用户，依据第 13 条，你必须向其提供对应的完整源代码。第三方组件许可见
+THIRD-PARTY-LICENSES.md。
+

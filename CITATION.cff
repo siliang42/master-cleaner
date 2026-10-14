@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: >-
+  If you use Master Cleaner in a project, publication, product, or derivative
+  work, please cite it as below and preserve the attribution notice described
+  in NOTICE (AGPLv3 Section 7 additional terms).
+title: "Master Cleaner"
+abstract: >-
+  Cross-platform (macOS / Windows / Linux) disk cleaner and optimizer with
+  first-class cleanup of AI-era residue, caches, logs, build artifacts,
+  containers, large files, and duplicates. Ships a CLI and a local dashboard.
+type: software
+version: 1.0.0
+date-released: "2026-10-14"
+license: AGPL-3.0-only
+authors:
+  - name: "Master Cleaner authors and contributors"
+    email: "obanie@qq.com"
+repository-code: "https://github.com/siliang42/master-cleaner"
+url: "https://github.com/siliang42/master-cleaner"
+keywords:
+  - disk cleaner
+  - developer tools
+  - AI residue cleanup

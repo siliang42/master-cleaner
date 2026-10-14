@@ -1,0 +1,648 @@
+'use strict';
+
+const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+const T = (k, p) => (window.I18N ? window.I18N.t(k, p) : k);
+const L = (s) => (window.I18N ? window.I18N.localize(s) : s);
+const CAT = (id) => (window.I18N ? window.I18N.cat(id) : id);
+
+const state = {
+  report: null,
+  disk: null,
+  selected: new Set(),
+  sort: { key: 'size', dir: 'desc' },
+  scanModules: null,
+  scanning: false,
+  mode: 'quarantine',
+  expert: false,
+  filter: null,
+  schedules: [],
+  vault: [],
+  view: 'scan',
+  legalText: null,
+  about: null,
+};
+
+function fmt(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const v = bytes / Math.pow(1024, i);
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${u[i]}`;
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function toast(title, msg, err = false) {
+  const el = $('#toast');
+  const tEl = $('.toast-title', el);
+  const mEl = $('.toast-msg', el);
+  if (tEl) tEl.textContent = title;
+  if (mEl) { mEl.textContent = msg || ''; mEl.hidden = !msg; }
+  el.className = 'toast' + (err ? ' err' : '');
+  el.hidden = false;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  const close = $('.toast-close', el);
+  if (close) close.onclick = () => { el.hidden = true; };
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 5200);
+}
+
+async function api(path, opts) {
+  let url = path;
+  if (path.indexOf('/api/') === 0) {
+    url = path + (path.indexOf('?') === -1 ? '?' : '&') + 'lang=' + encodeURIComponent((window.I18N && window.I18N.locale) || '');
+  }
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+/* ---------------- state ---------------- */
+async function refreshState() {
+  const s = await api('/api/state');
+  state.schedules = s.schedules;
+  state.vault = s.vault.runs;
+  state.disk = s.disk;
+  updateDiskBar();
+  const subEl = $('#subtitle');
+  if (subEl) subEl.textContent = `${s.os} · ${s.arch}`;
+  $('#os-info').textContent = T('osInfo', { os: s.os, priv: s.elevated ? T('privilege.admin') : T('privilege.user'), version: s.version });
+  renderCategories(s.modules);
+  renderSchedules();
+  renderVault(s.vault);
+  if (s.legal) {
+    state.about = { version: s.version, os: s.os, arch: s.arch, dataDir: s.dataDir, desktop: s.desktop, runtime: s.runtime, legal: s.legal };
+    const ver = $('#legal-version'); if (ver) ver.textContent = 'v' + (s.version || '');
+    const lic = $('#legal-license'); if (lic) lic.textContent = s.legal.licenseId || 'AGPL-3.0';
+    const at = $('#legal-attrib'); if (at) at.textContent = s.legal.attributionNotice || '';
+  }
+}
+
+function renderCategories(modules) {
+  const counts = {};
+  for (const m of modules) {
+    if (!m.supported) continue;
+    counts[m.category] = counts[m.category] || { n: 0, bytes: 0, titles: [] };
+    counts[m.category].n++;
+    counts[m.category].titles.push(m.title);
+  }
+  if (state.report) {
+    for (const mod of state.report.modules) {
+      const c = counts[mod.category];
+      if (c) c.bytes += mod.items.filter((i) => !i.duplicate && i.strategy !== 'info').reduce((a, i) => a + i.bytes, 0);
+    }
+  }
+  const ul = $('#cat-list');
+  ul.innerHTML = '';
+  const all = document.createElement('li');
+  all.className = state.filter ? '' : 'active';
+  all.innerHTML = `<span>${esc(T('cat.allModules'))}</span>`;
+  all.onclick = () => { state.filter = null; renderCategories(modules); render(); };
+  ul.appendChild(all);
+  for (const cat of Object.keys(counts)) {
+    const li = document.createElement('li');
+    li.className = state.filter === cat ? 'active' : '';
+    li.innerHTML = `<span>${esc(CAT(cat))}</span><span class="cat-size">${counts[cat].bytes ? fmt(counts[cat].bytes) : ''}</span>`;
+    li.onclick = () => { state.filter = cat; renderCategories(modules); render(); };
+    ul.appendChild(li);
+  }
+}
+
+/* ---------------- disk bar (Lemon-style) ---------------- */
+function diskLevel(pct) { return pct >= 90 ? 'crit' : pct >= 75 ? 'warn' : 'ok'; }
+function reclaimBytesTotal() {
+  return state.report
+    ? state.report.modules.flatMap((m) => m.items).filter((i) => !i.duplicate && i.strategy !== 'info').reduce((a, i) => a + i.bytes, 0)
+    : 0;
+}
+function updateDiskBar() {
+  const d = state.disk;
+  if (!d || !d.total) return;
+  const pct = Math.round((d.used / d.total) * 100);
+  const rec = reclaimBytesTotal();
+  const lbl = $('#disk-label'); if (lbl) lbl.textContent = T('diskUsed', { pct });
+  const free = $('#disk-free'); if (free) free.textContent = T('diskFree', { free: d.freeHuman, total: d.totalHuman });
+  const usedEl = $('#disk-used');
+  if (usedEl) { usedEl.style.width = pct + '%'; usedEl.className = 'lv-' + diskLevel(pct); }
+  const dotEl = $('#disk-dot'); if (dotEl) dotEl.className = 'disk-dot lv-' + diskLevel(pct);
+  const recPct = d.total ? Math.min(pct, (rec / d.total) * 100) : 0;
+  const recEl = $('#disk-reclaim');
+  if (recEl) {
+    if (recPct > 0.4) { recEl.hidden = false; recEl.style.left = (pct - recPct) + '%'; recEl.style.width = recPct + '%'; }
+    else recEl.hidden = true;
+  }
+  const meterEl = $('#disk-meter'); if (meterEl) meterEl.setAttribute('aria-valuenow', String(pct));
+  const tip = $('#disk-tip');
+  if (tip) {
+    tip.innerHTML = `
+      <div class="tip-row"><span>${esc(T('disk.total'))}</span><b>${esc(d.totalHuman)}</b></div>
+      <div class="tip-row"><span>${esc(T('disk.used'))}</span><b>${esc(d.usedHuman)} \u00b7 ${pct}%</b></div>
+      <div class="tip-row"><span>${esc(T('disk.free'))}</span><b>${esc(d.freeHuman)}</b></div>
+      ${rec > 0 ? `<div class="tip-row accent"><span>${esc(T('disk.reclaim'))}</span><b>${esc(fmt(rec))}</b></div>` : ''}
+      <div class="tip-hint">${esc(T('disk.tipHint'))}</div>`;
+  }
+}
+function openDiskModal() {
+  const m = $('#disk-modal');
+  const d = state.disk;
+  if (!m || !d || !d.total) return;
+  const pct = Math.round((d.used / d.total) * 100);
+  const rec = reclaimBytesTotal();
+  const big = $('#disk-big-used'); if (big) { big.style.width = pct + '%'; big.className = 'lv-' + diskLevel(pct); }
+  const recPct = d.total ? Math.min(pct, (rec / d.total) * 100) : 0;
+  const bigRec = $('#disk-big-reclaim');
+  if (bigRec) {
+    if (recPct > 0.4) { bigRec.hidden = false; bigRec.style.left = (pct - recPct) + '%'; bigRec.style.width = recPct + '%'; }
+    else bigRec.hidden = true;
+  }
+  const lg = $('#disk-legend');
+  if (lg) {
+    const rows = [
+      ['total', T('disk.total'), d.totalHuman, ''],
+      ['used', T('disk.used'), d.usedHuman, pct + '%'],
+      ['accent', T('disk.reclaim'), rec > 0 ? fmt(rec) : '\u2014', rec > 0 ? ((rec / d.total) * 100).toFixed(1) + '%' : ''],
+      ['free', T('disk.free'), d.freeHuman, (100 - pct) + '%'],
+    ];
+    lg.innerHTML = rows.map(([c, k, v, p]) => `<div class="disk-li ${c}"><span class="dot"></span><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span><span class="p">${esc(p)}</span></div>`).join('');
+  }
+  m.hidden = false;
+}
+function closeDiskModal() { const m = $('#disk-modal'); if (m) m.hidden = true; }
+
+/* ---------------- scan ---------------- */
+function setScanning(on) {
+  const btn = $('#btn-scan');
+  if (btn) {
+    btn.classList.toggle('is-loading', on);
+    btn.disabled = on;
+    const label = btn.querySelector('span');
+    if (label && label.hasAttribute('data-i18n')) label.textContent = on ? T('scan.running') : T('scan');
+  }
+  if (on) { const bar = $('#result-bar'); if (bar) bar.hidden = true; }
+}
+
+function runScan() {
+  if (state.scanning) return;
+  state.scanning = true;
+  setScanning(true);
+  const panel = $('#scan-panel');
+  const steps = $('#scan-steps');
+  const elapsed = $('#scan-elapsed');
+  const t0 = Date.now();
+  panel.hidden = false;
+  steps.innerHTML = '';
+  elapsed.textContent = '0.0s';
+  clearInterval(runScan._timer);
+  runScan._timer = setInterval(() => { elapsed.textContent = ((Date.now() - t0) / 1000).toFixed(1) + 's'; }, 100);
+  $('#results').innerHTML = '';
+  $('#stats').innerHTML = '';
+  const params = new URLSearchParams();
+  params.set('lang', (window.I18N && window.I18N.locale) || '');
+  if (state.expert) params.set('expert', '1');
+  if (state.scanModules) params.set('modules', state.scanModules);
+  else if (state.filter) params.set('modules', state.filter);
+  const es = new EventSource('/api/scan/stream?' + params.toString());
+  const stop = () => { clearInterval(runScan._timer); panel.hidden = true; state.scanning = false; setScanning(false); };
+  const addStep = (text) => {
+    const prev = steps.lastElementChild;
+    if (prev) prev.classList.replace('running', 'done');
+    const li = document.createElement('li');
+    li.className = 'running';
+    li.innerHTML = '<span class="dot"></span><span class="t"></span>';
+    $('.t', li).textContent = text;
+    steps.appendChild(li);
+    steps.scrollTop = steps.scrollHeight;
+  };
+  es.addEventListener('log', (e) => { addStep(JSON.parse(e.data).message); });
+  es.addEventListener('done', (e) => {
+    es.close();
+    stop();
+    state.report = JSON.parse(e.data);
+    state.filter = null;
+    state.selected = new Set();
+    for (const m of state.report.modules) for (const it of m.items) if (it.defaultSelected && it.strategy !== 'info') state.selected.add(it.id);
+    refreshState().catch(() => {});
+    render();
+  });
+  es.addEventListener('error', (e) => {
+    es.close();
+    stop();
+    toast(T('toast.scanError'), e.data ? L(JSON.parse(e.data).message) : T('toast.connectionLost'), true);
+  });
+}
+
+function selectedItems() {
+  const all = [];
+  if (!state.report) return all;
+  for (const m of state.report.modules) for (const it of m.items) all.push(it);
+  return all;
+}
+
+/* ---------------- render ---------------- */
+function render() {
+  if (!state.report) return;
+  const items = selectedItems();
+  const live = items.filter((i) => !i.duplicate);
+  const reclaim = live.filter((i) => i.strategy !== 'info').reduce((a, i) => a + i.bytes, 0);
+  const reportOnly = live.filter((i) => i.strategy === 'info').reduce((a, i) => a + i.bytes, 0);
+  const dupCount = items.length - live.length;
+  const selBytes = items.filter((i) => state.selected.has(i.id)).reduce((a, i) => a + i.bytes, 0);
+  $('#stats').innerHTML = `
+    <div class="stat accent"><div class="k">${esc(T('stat.reclaim'))}</div><div class="v">${fmt(reclaim)}</div></div>
+    <div class="stat"><div class="k">${esc(T('stat.selected'))}</div><div class="v">${fmt(selBytes)}</div></div>
+    <div class="stat"><div class="k">${esc(T('stat.reportOnly'))}</div><div class="v">${fmt(reportOnly)}</div></div>
+    <div class="stat" title="${dupCount ? esc(T('dup.title', { n: dupCount })) : ''}"><div class="k">${esc(T('stat.items'))}</div><div class="v">${live.length}</div></div>
+    <div class="stat"><div class="k">${esc(T('stat.elapsed'))}</div><div class="v">${((state.report.finishedAt - state.report.startedAt) / 1000).toFixed(1)}s</div></div>`;
+
+  const results = $('#results');
+  results.innerHTML = '';
+  const shown = state.report.modules.filter((m) => m.items.length && (!state.filter || m.category === state.filter));
+  if (!shown.length) {
+    results.innerHTML = `<div class="empty"><h2>${esc(T('empty.noItems.title'))}</h2><p>${esc(T('empty.noItems.body'))}</p></div>`;
+  }
+  for (const mod of shown) renderModule(mod, results);
+  updateActionbar();
+  updateSortUI();
+  updateDiskBar();
+}
+
+function updateSortUI() {
+  const bar = $('#result-bar');
+  if (bar) bar.hidden = !state.report;
+  $$('.sort-btn').forEach((btn) => {
+    const on = btn.dataset.key === state.sort.key;
+    btn.classList.toggle('active', on);
+    const d = $('.dir', btn);
+    if (d) d.textContent = on ? (state.sort.dir === 'asc' ? '\u2191' : '\u2193') : '';
+    btn.setAttribute('title', T(btn.dataset.key === 'name' ? 'sort.byName' : 'sort.bySize') + ' \u00b7 ' + T(state.sort.dir === 'asc' ? 'sort.asc' : 'sort.desc'));
+  });
+  const exp = $('#expert-toggle');
+  if (exp) {
+    const items = selectedItems();
+    const canExpert = items.some((i) => i.risk === 'expert' && i.strategy !== 'info' && !i.duplicate);
+    exp.hidden = !(canExpert || state.expert);
+    const cb = $('#opt-expert');
+    if (cb) cb.checked = state.expert;
+  }
+}
+
+function initSort() {
+  $$('.sort-btn').forEach((btn) => {
+    btn.onclick = () => {
+      const k = btn.dataset.key;
+      if (state.sort.key === k) {
+        state.sort.dir = state.sort.dir === 'desc' ? 'asc' : 'desc';
+      } else {
+        state.sort.key = k;
+        state.sort.dir = k === 'name' ? 'asc' : 'desc';
+      }
+      updateSortUI();
+      render();
+    };
+  });
+  updateSortUI();
+}
+
+/* Sort the items of a module. Default: size, descending. Name uses the file
+ * basename when available, falling back to the label. */
+function sortItems(items, key, dir) {
+  const mul = dir === 'asc' ? 1 : -1;
+  const nameOf = (it) => {
+    const p = it.path || '';
+    const base = p ? p.split(/[\\/]/).filter(Boolean).pop() : '';
+    return (base || it.label || '').toString();
+  };
+  return [...items].sort((a, b) => {
+    if (key === 'name') {
+      const r = nameOf(a).localeCompare(nameOf(b));
+      if (r) return r * mul;
+      return b.bytes - a.bytes;
+    }
+    return (a.bytes - b.bytes) * mul;
+  });
+}
+
+function renderModule(mod, container) {
+  const items = sortItems(mod.items, state.sort.key, state.sort.dir);
+  const sum = items.filter((i) => !i.duplicate && i.strategy !== 'info').reduce((a, i) => a + i.bytes, 0);
+  const el = document.createElement('div');
+  el.className = 'module';
+  el.innerHTML = `
+    <div class="module-head">
+      <svg class="caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+      <span class="title">${esc(L(mod.title))}</span>
+      <span class="desc">${esc(L(mod.description))}</span>
+      <span class="sum">${fmt(sum)}</span>
+    </div>
+    <div class="module-body"></div>`;
+  const body = $('.module-body', el);
+  for (const it of items) body.appendChild(renderItem(it));
+  if (mod.notes && mod.notes.length) {
+    const n = document.createElement('div');
+    n.className = 'notes';
+    n.innerHTML = mod.notes.map((t) => `<div>· ${esc(L(t))}</div>`).join('');
+    body.appendChild(n);
+  }
+  $('.module-head', el).onclick = () => el.classList.toggle('collapsed');
+  container.appendChild(el);
+  return el;
+}
+
+function renderItem(it) {
+  const row = document.createElement('div');
+  const disabled = it.strategy === 'info' || (it.risk === 'expert' && !state.expert);
+  row.className = 'item' + (disabled ? ' disabled' : '');
+  const badge = it.risk !== 'safe' ? `<span class="badge ${it.risk}">${it.risk === 'caution' ? esc(T('badge.caution')) : esc(T('badge.expert'))}</span>` : `<span class="badge safe">${esc(T('badge.safe'))}</span>`;
+  const info = it.strategy === 'info' ? `<span class="badge info">${esc(T('badge.info'))}</span>` : '';
+  const dup = it.duplicate ? `<span class="badge dup" title="${esc(T('dup.hint'))}">${esc(T('badge.dup'))}</span>` : '';
+  const hasDetail = !!(it.detail || it.path);
+  row.innerHTML = `
+    <input class="check" type="checkbox" ${state.selected.has(it.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
+    <div>
+      <div class="label"><span class="name">${esc(L(it.label))}</span>${badge}${info}${dup}</div>
+      ${hasDetail ? `<button class="detail-toggle">${esc(T('detail.show'))}</button><div class="meta">${esc(L(it.detail || it.path || ''))}</div>` : ''}
+    </div>
+    <div class="size">${it.bytes ? fmt(it.bytes) : ''}</div>`;
+  const cb = $('.check', row);
+  cb.onchange = () => {
+    if (cb.checked) state.selected.add(it.id); else state.selected.delete(it.id);
+    updateActionbar();
+  };
+  const dt = $('.detail-toggle', row);
+  if (dt) dt.onclick = () => { row.classList.toggle('open'); dt.textContent = row.classList.contains('open') ? T('detail.hide') : T('detail.show'); };
+  return row;
+}
+
+function updateActionbar() {
+  const items = selectedItems();
+  const selBytes = items.filter((i) => state.selected.has(i.id)).reduce((a, i) => a + i.bytes, 0);
+  $('#sel-count').textContent = T('sel.count', { n: state.selected.size });
+  $('#sel-size').textContent = fmt(selBytes);
+  $('#actionbar').hidden = !state.report || state.selected.size === 0;
+}
+
+/* ---------------- clean ---------------- */
+async function doClean() {
+  const ids = Array.from(state.selected);
+  if (!ids.length) return;
+  const btn = $('#btn-clean');
+  btn.disabled = true;
+  btn.classList.add('is-loading');
+  const lbl = btn.querySelector('span');
+  if (lbl) lbl.textContent = T('clean.cleaning');
+  $$('.seg[data-mode]').forEach((s) => (s.disabled = true));
+  const scanBtn = $('#btn-scan'); if (scanBtn) scanBtn.disabled = true;
+  try {
+    const res = await api('/api/clean', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids, mode: state.mode }) });
+    toast(T('toast.cleanDone'), T('clean.done.body', { bytes: res.recordHuman.bytes, n: res.record.removed, vaultNote: state.mode === 'quarantine' ? T('clean.vaultNote') : '' }));
+    if (res.skipped && res.skipped.length) toast(T('toast.skipped'), T('clean.skipped.body', { n: res.skipped.length }), false);
+    state.selected = new Set();
+    runScan();
+  } catch (e) {
+    toast(T('toast.cleanFailed'), String(e), true);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+    const l2 = btn.querySelector('span'); if (l2) l2.textContent = T('clean.selected');
+    $$('.seg[data-mode]').forEach((s) => (s.disabled = false));
+    const sb = $('#btn-scan'); if (sb) sb.disabled = state.scanning;
+    updateActionbar();
+  }
+}
+
+/* ---------------- schedules ---------------- */
+function renderSchedules() {
+  const box = $('#sched-list');
+  box.innerHTML = '';
+  if (!state.schedules.length) {
+    box.innerHTML = `<div class="muted">${esc(T('sched.empty'))}</div>`;
+    return;
+  }
+  for (const s of state.schedules) {
+    const row = document.createElement('div');
+    row.className = 'list-row';
+    const next = s.nextRun ? new Date(s.nextRun).toLocaleString() : '—';
+    row.innerHTML = `
+      <div class="grow">
+        <div class="name">${esc(s.name)}</div>
+        <div class="muted small">cron ${esc(s.cron)} · ${esc(s.description || '')} · ${esc(T('sched.modules'))} ${s.moduleIds.join(', ')} · ${esc(s.mode)}</div>
+        <div class="muted small">${esc(T('sched.next'))} ${next}${s.lastRunAt ? ` · ${esc(T('sched.last'))} ${new Date(s.lastRunAt).toLocaleString()} (${fmt(s.lastResult?.bytes || 0)})` : ''}</div>
+      </div>
+      <button class="btn btn-ghost" data-act="toggle">${esc(s.enabled ? T('sched.toggle.disable') : T('sched.toggle.enable'))}</button>
+      <button class="btn btn-ghost" data-act="remove">${esc(T('sched.remove'))}</button>`;
+    row.querySelector('[data-act="toggle"]').onclick = async () => { await api(`/api/schedules/${s.id}/${s.enabled ? 'disable' : 'enable'}`, { method: 'POST' }); refreshState(); };
+    row.querySelector('[data-act="remove"]').onclick = async () => { await api(`/api/schedules/${s.id}`, { method: 'DELETE' }); refreshState(); };
+    box.appendChild(row);
+  }
+}
+
+function renderSchedModuleChips() {
+  const box = $('#sched-modules');
+  if (!state.report) return;
+  const mods = state.report.modules.filter((m) => m.supported);
+  box.innerHTML = '';
+  for (const m of mods) {
+    const on = ['ai-residue', 'dev-caches', 'system-junk'].includes(m.id);
+    const c = document.createElement('button');
+    c.type = 'button';
+    c.className = 'chip' + (on ? ' on' : '');
+    c.textContent = L(m.title);
+    c.dataset.id = m.id;
+    c.onclick = () => c.classList.toggle('on');
+    box.appendChild(c);
+  }
+}
+
+/* ---------------- vault ---------------- */
+function renderVault(v) {
+  const box = $('#vault-list');
+  const runs = v.runs || state.vault || [];
+  if (!runs.length) {
+    box.innerHTML = `<div class="muted">${esc(T('vault.empty'))}</div>`;
+    return;
+  }
+  box.innerHTML = '';
+  for (const r of runs) {
+    const row = document.createElement('div');
+    row.className = 'list-row';
+    row.innerHTML = `
+      <div class="grow">
+        <div class="name">${esc(r.id)} · ${esc(r.mode)}</div>
+        <div class="muted small">${esc(T('sel.count', { n: r.entries.length }))} · ${fmt(r.bytes)} · ${new Date(r.at).toLocaleString()}</div>
+      </div>
+      <button class="btn">${esc(T('vault.restore'))}</button>`;
+    row.querySelector('button').onclick = async () => {
+      const res = await api('/api/vault/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }) });
+      toast(T('toast.restored'), T('vault.restored.body', { n: res.restored }));
+      refreshState();
+    };
+    box.appendChild(row);
+  }
+}
+
+/* ---------------- about / legal ---------------- */
+async function ensureLegalText() {
+  if (state.legalText != null) return state.legalText;
+  try {
+    const r = await api('/api/legal');
+    state.legalText = r && r.text ? r.text : '';
+  } catch (e) {
+    state.legalText = '';
+  }
+  return state.legalText;
+}
+
+function aboutRow(label, value) {
+  const v = value == null || value === '' ? '\u2014' : value;
+  return `<div class="about-row"><span class="k">${esc(label)}</span><span class="v">${esc(v)}</span></div>`;
+}
+
+function renderAbout() {
+  const box = $('#about-body');
+  if (!box) return;
+  const a = state.about || {};
+  const lg = a.legal || {};
+  const rt = a.runtime || {};
+  const runtime = [rt.electron ? `Electron ${rt.electron}` : null, rt.chrome ? `Chromium ${rt.chrome}` : null, rt.node ? `Node ${rt.node}` : null].filter(Boolean).join(' \u00b7 ');
+  const links = [];
+  if (lg.projectUrl) links.push(`<a class="linkish" href="${esc(lg.projectUrl)}" target="_blank" rel="noreferrer">${esc(T('about.home'))}</a>`);
+  if (lg.contactEmail) links.push(`<a class="linkish" href="mailto:${esc(lg.contactEmail)}">${esc(T('about.contact'))}</a>`);
+  box.innerHTML = `
+    <div class="about-hero">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <div class="about-title">${esc(lg.productName || 'Master Cleaner')}</div>
+        <div class="muted small">v${esc(a.version || lg.version || '\u2014')} \u00b7 ${esc(lg.licenseId || 'AGPL-3.0-only')}${a.desktop ? ' \u00b7 ' + esc(T('about.desktop')) : ''}</div>
+      </div>
+    </div>
+    <div class="about-grid">
+      ${aboutRow(T('about.license'), `${lg.licenseName || 'GNU Affero General Public License v3.0'} (${lg.licenseId || 'AGPL-3.0-only'})`)}
+      ${aboutRow(T('about.copyright'), lg.copyright || '')}
+      ${aboutRow(T('about.attribution'), lg.attributionNotice || '')}
+      ${aboutRow(T('about.oslabel'), [a.os, a.arch].filter(Boolean).join(' \u00b7 '))}
+      ${aboutRow(T('about.runtime'), runtime)}
+      ${aboutRow(T('about.dataDir'), a.dataDir || '')}
+    </div>
+    <div class="about-section">
+      <div class="about-h">${esc(T('about.disclaimer'))}</div>
+      <ul class="about-list">${(lg.disclaimer || []).map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
+      <p class="muted small">${esc(T('about.accept'))}</p>
+    </div>
+    <div class="about-section">
+      <details>
+        <summary>${esc(T('about.viewFull'))}</summary>
+        <pre id="about-legal-text" class="legal-text"></pre>
+      </details>
+    </div>
+    <div class="about-foot">${links.join('')}</div>
+  `;
+}
+
+async function openAbout() {
+  const modal = $('#about-modal');
+  if (!modal) return;
+  renderAbout();
+  modal.hidden = false;
+  await ensureLegalText();
+  const pre = $('#about-legal-text');
+  if (pre) pre.textContent = state.legalText || T('about.noText');
+}
+function closeAbout() { const m = $('#about-modal'); if (m) m.hidden = true; }
+
+/* ---------------- settings ---------------- */
+function currentLangChoice() { try { return localStorage.getItem('mc-lang') || ''; } catch (e) { return ''; } }
+function openSettings() {
+  const m = $('#settings-modal');
+  if (!m) return;
+  const cur = currentLangChoice();
+  $$('#lang-seg .seg').forEach((b) => b.classList.toggle('active', (b.dataset.lang || '') === cur));
+  m.hidden = false;
+}
+function closeSettings() { const m = $('#settings-modal'); if (m) m.hidden = true; }
+function setLanguage(v) {
+  try { if (v) localStorage.setItem('mc-lang', v); else localStorage.removeItem('mc-lang'); } catch (e) { /* ignore */ }
+  location.reload();
+}
+window.openSettings = openSettings;
+
+/* ---------------- wiring ---------------- */
+function setView(v) {
+  state.view = v;
+  $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
+  $$('.view').forEach((el) => (el.hidden = el.id !== 'view-' + v));
+  $('#actionbar').hidden = v !== 'scan' || !state.report || state.selected.size === 0;
+  if (v === 'schedule') renderSchedModuleChips();
+}
+
+function init() {
+  $('#btn-scan').onclick = runScan;
+  $('#btn-clean').onclick = doClean;
+  $('#opt-expert').onchange = (e) => { state.expert = e.target.checked; if (state.report) runScan(); };
+  $$('.tab').forEach((t) => (t.onclick = () => setView(t.dataset.view)));
+  $$('.seg[data-mode]').forEach((s) => (s.onclick = () => { state.mode = s.dataset.mode; $$('.seg[data-mode]').forEach((x) => x.classList.toggle('active', x === s)); }));
+  initSort();
+  $('#sched-preset').onchange = (e) => { $('#sched-cron-field').hidden = e.target.value !== 'custom'; };
+  $('#sched-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const preset = $('#sched-preset').value;
+    const cron = preset === 'custom' ? $('#sched-cron').value.trim() : preset;
+    const moduleIds = $$('#sched-modules .chip.on').map((c) => c.dataset.id);
+    try {
+      await api('/api/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: $('#sched-name').value, cron, moduleIds, mode: $('#sched-mode').value }) });
+      toast(T('toast.schedCreated'), cron);
+      refreshState();
+    } catch (err) {
+      toast(T('toast.schedFailed'), String(err), true);
+    }
+  };
+  $('#btn-purge').onclick = async () => {
+    const res = await api('/api/vault/purge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ olderThan: 30 }) });
+    toast(T('toast.vaultPurged'), T('purged.body', { bytes: res.bytesHuman }));
+    refreshState();
+  };
+  const aboutBtn = $('#btn-about');
+  if (aboutBtn) {
+    aboutBtn.onclick = openAbout;
+    $('#about-close').onclick = closeAbout;
+    $('#about-modal').addEventListener('click', (e) => { if (e.target.id === 'about-modal') closeAbout(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAbout(); });
+  }
+  const meterEl = $('#disk-meter');
+  if (meterEl) {
+    meterEl.addEventListener('click', openDiskModal);
+    meterEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDiskModal(); } });
+  }
+  const diskCloseBtn = $('#disk-close');
+  if (diskCloseBtn) diskCloseBtn.onclick = closeDiskModal;
+  const diskModalEl = $('#disk-modal');
+  if (diskModalEl) diskModalEl.addEventListener('click', (e) => { if (e.target.id === 'disk-modal') closeDiskModal(); });
+  const viewLargeBtn = $('#disk-view-large');
+  if (viewLargeBtn) viewLargeBtn.onclick = () => { closeDiskModal(); state.filter = 'largefiles'; refreshState().catch(() => {}); };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDiskModal(); });
+  const settingsBtn = $('#btn-settings');
+  if (settingsBtn) settingsBtn.onclick = openSettings;
+  const settingsCloseBtn = $('#settings-close');
+  if (settingsCloseBtn) settingsCloseBtn.onclick = closeSettings;
+  const settingsModalEl = $('#settings-modal');
+  if (settingsModalEl) settingsModalEl.addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+  $$('#lang-seg .seg').forEach((b) => (b.onclick = () => setLanguage(b.dataset.lang || '')));
+  const kbd = $('#settings-kbd');
+  if (kbd) kbd.textContent = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '\u2318,' : 'Ctrl+,';
+  document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
+  refreshState().catch((e) => toast(T('toast.backend'), String(e), true));
+  const qs = new URLSearchParams(location.search);
+  const sk = qs.get('sort');
+  if (sk === 'size' || sk === 'name') state.sort.key = sk;
+  const sd = qs.get('dir');
+  if (sd === 'asc' || sd === 'desc') state.sort.dir = sd;
+  const sm = qs.get('modules');
+  if (sm) state.scanModules = sm;
+  updateSortUI();
+  if (qs.get('auto') === '1') setTimeout(runScan, 300);
+}
+
+if (window.I18N && window.I18N.ready) window.I18N.ready.then(init); else init();
