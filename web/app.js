@@ -138,15 +138,6 @@ function updateDiskBar() {
     else recEl.hidden = true;
   }
   const meterEl = $('#disk-meter'); if (meterEl) meterEl.setAttribute('aria-valuenow', String(pct));
-  const tip = $('#disk-tip');
-  if (tip) {
-    tip.innerHTML = `
-      <div class="tip-row"><span>${esc(T('disk.total'))}</span><b>${esc(d.totalHuman)}</b></div>
-      <div class="tip-row"><span>${esc(T('disk.used'))}</span><b>${esc(d.usedHuman)} \u00b7 ${pct}%</b></div>
-      <div class="tip-row"><span>${esc(T('disk.free'))}</span><b>${esc(d.freeHuman)}</b></div>
-      ${rec > 0 ? `<div class="tip-row accent"><span>${esc(T('disk.reclaim'))}</span><b>${esc(fmt(rec))}</b></div>` : ''}
-      <div class="tip-hint">${esc(T('disk.tipHint'))}</div>`;
-  }
 }
 function openDiskModal() {
   const m = $('#disk-modal');
