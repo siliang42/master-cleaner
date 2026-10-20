@@ -7,6 +7,7 @@ import { runScan, runClean, allModules, loadConfig, saveConfig } from './core/en
 import { ScheduleStore, nextRun, describeCron } from './core/scheduler';
 import { Vault } from './core/vault';
 import { diskUsage, osLabel, isElevated } from './core/platform';
+import { systemMetrics } from './core/metrics';
 import { formatBytes } from './core/util';
 import { dataDir } from './core/paths';
 import type { ScanReport, CandidateItem } from './core/types';
@@ -71,7 +72,7 @@ async function statePayload() {
   const schedules = (await store.list()).map((s) => ({ ...s, nextRun: nextRun(s.cron), description: localize(describeCron(s.cron)) }));
   const cfg = await loadConfig();
   return {
-    version: '0.1.0',
+    version: LEGAL.version,
     locale: getLocale(),
     platform: process.platform,
     os: osLabel(),
@@ -213,8 +214,30 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     const body = await readBody(req);
     const vault = new Vault();
     const olderThan = body.olderThan ? Number(body.olderThan) : 0;
+    const runs = await vault.runs();
+    const count = olderThan > 0 ? runs.filter((r) => r.at < Date.now() - olderThan * 86400000).length : runs.length;
     const bytes = olderThan > 0 ? await vault.purgeOlderThan(olderThan) : await vault.purgeAll();
-    json(res, 200, { bytes, bytesHuman: formatBytes(bytes) });
+    json(res, 200, { bytes, bytesHuman: formatBytes(bytes), count });
+    return true;
+  }
+  if (p === '/api/metrics' && req.method === 'GET') {
+    json(res, 200, await systemMetrics());
+    return true;
+  }
+  if (p === '/api/quick-clean' && req.method === 'POST') {
+    if (scanning) { json(res, 429, { ok: false, error: localize('已有扫描在进行中') }); return true; }
+    scanning = true;
+    try {
+      const report = await runScan({ opts: { includeInfo: false } });
+      lastReport = report;
+      const items = report.modules.flatMap((m) => m.items).filter((i) => i.defaultSelected && i.strategy !== 'info');
+      const { record, skipped } = await runClean(items, { mode: 'quarantine', dryRun: false });
+      json(res, 200, { ok: true, count: items.length, removed: record.removed, bytes: record.bytes, bytesHuman: formatBytes(record.bytes), skipped: skipped.length });
+    } catch (e) {
+      json(res, 500, { ok: false, error: String(e) });
+    } finally {
+      scanning = false;
+    }
     return true;
   }
   if (p === '/api/config' && req.method === 'POST') {

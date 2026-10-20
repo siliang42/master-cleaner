@@ -30,10 +30,10 @@ Master Cleaner 是一款**本地优先**的磁盘清理工具，面向开发者�
   <img src="docs/screenshots/zh/results.png" alt="扫描结果" width="860">
 </p>
 
-**语言（默认跟随系统）与磁盘详情**
+**系统监控（左下角按钮在「中 / EN」之间互切）与磁盘详情**
 
 <p align="center">
-  <img src="docs/screenshots/zh/settings.png" alt="设置" width="420">
+  <img src="docs/screenshots/zh/monitor.png" alt="系统监控" width="420">
   &nbsp;
   <img src="docs/screenshots/zh/disk.png" alt="磁盘详情" width="420">
 </p>
@@ -43,6 +43,7 @@ Master Cleaner 是一款**本地优先**的磁盘清理工具，面向开发者�
 - **模块化扫描**：AI 残留、开发缓存、系统垃圾、应用缓存、应用使用痕迹（保留登录）、容器、浏览器隐私、大文件、重复文件、下载目录、启动项，以及 macOS / Windows 专有项。
 - **风险分级**：`safe` / `caution` / `expert`。专家级项目默认不勾选，且仅在确实可清理时才出现。
 - **三种处置方式**：安全回收站（默认，可还原）、系统回收站、永久删除。
+- **系统监控与菜单栏**：CPU / 内存 / 磁盘 / 温度实时卡片；菜单栏图标单击切换语言、双击快速清理。
 - **定时清理**：内置 `mc daemon`，或交给系统计划任务（launchd / schtasks / cron）。
 - **安全层**：禁止清单 + 允许清单双重校验，越界路径只报告、不删除。
 - **本地仪表盘**：仅绑定 `127.0.0.1`，通过 SSE 实时推送扫描进度，首次运行跟随系统语言。

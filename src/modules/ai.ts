@@ -13,8 +13,10 @@ import type { CleanerModule, Ctx, ModuleResult, CandidateItem } from '../core/ty
  * Design principle: we separate *disposable* residue (caches, logs, telemetry,
  * shell snapshots) from *valuable* residue (conversation history, project
  * memory, model weights, extensions). Disposable items are pre-selected;
- * valuable ones are reported as `expert` and never auto-selected, so users
- * never lose a chat log or a 40 GB model by accident.
+ * valuable ones stay `expert` and are never auto-selected, so a careless scan
+ * never loses a chat log or a 40 GB model. They remain manually selectable
+ * (expert mode only) because deleting an old model is a legitimate way to
+ * reclaim space — it just has to be a deliberate choice.
  */
 
 interface Row {
@@ -91,18 +93,18 @@ function rows(home: string): Row[] {
     add({ path: p, category: `AI 编程助手 · ${category}`, label, risk: 'safe', strategy: 'quarantine', selected: true, detail: '可自动重建的缓存/日志/临时文件' });
   }
 
-  // ---- AI coding agents: valuable residues (never auto-selected) ----------
-  add({ path: path.join(h, '.claude', 'projects'), category: 'AI 编程助手 · Claude Code', label: 'Claude Code 会话记录', risk: 'expert', strategy: 'info', selected: false, detail: '包含历史对话与项目上下文，删除不可恢复，默认仅统计' });
-  add({ path: path.join(h, '.claude', 'history'), category: 'AI 编程助手 · Claude Code', label: 'Claude Code 输入历史', risk: 'expert', strategy: 'info', selected: false });
-  add({ path: path.join(h, '.codex', 'sessions'), category: 'AI 编程助手 · Codex', label: 'Codex 会话回放', risk: 'expert', strategy: 'info', selected: false, detail: 'rollout 记录，体积可能较大，但含历史上下文' });
-  add({ path: path.join(h, '.codex', 'history.jsonl'), category: 'AI 编程助手 · Codex', label: 'Codex 命令历史', risk: 'expert', strategy: 'info', selected: false });
-  add({ path: path.join(h, '.cursor', 'extensions'), category: 'AI 编程助手 · Cursor', label: 'Cursor 扩展', risk: 'expert', strategy: 'info', selected: false, detail: '已安装扩展，删除后会重新下载' });
-  add({ path: path.join(libAS, 'Cursor', 'User', 'workspaceStorage'), category: 'AI 编程助手 · Cursor', label: 'Cursor 工作区状态', risk: 'expert', strategy: 'info', selected: false });
-  add({ path: path.join(libAS, 'Cursor', 'User', 'History'), category: 'AI 编程助手 · Cursor', label: 'Cursor 本地文件历史', risk: 'expert', strategy: 'info', selected: false });
+  // ---- AI coding agents: valuable residues (expert, never pre-selected) ---
+  add({ path: path.join(h, '.claude', 'projects'), category: 'AI 编程助手 · Claude Code', label: 'Claude Code 会话记录', risk: 'expert', strategy: 'quarantine', selected: false, detail: '包含历史对话与项目上下文；开启专家模式后可勾选，默认移入安全回收站（可还原）' });
+  add({ path: path.join(h, '.claude', 'history'), category: 'AI 编程助手 · Claude Code', label: 'Claude Code 输入历史', risk: 'expert', strategy: 'quarantine', selected: false, detail: '命令行输入历史；开启专家模式后可勾选' });
+  add({ path: path.join(h, '.codex', 'sessions'), category: 'AI 编程助手 · Codex', label: 'Codex 会话回放', risk: 'expert', strategy: 'quarantine', selected: false, detail: 'rollout 记录，体积可能较大；开启专家模式后可勾选，默认移入安全回收站（可还原）' });
+  add({ path: path.join(h, '.codex', 'history.jsonl'), category: 'AI 编程助手 · Codex', label: 'Codex 命令历史', risk: 'expert', strategy: 'quarantine', selected: false, detail: '命令行历史记录；开启专家模式后可勾选' });
+  add({ path: path.join(h, '.cursor', 'extensions'), category: 'AI 编程助手 · Cursor', label: 'Cursor 扩展', risk: 'expert', strategy: 'quarantine', selected: false, detail: '已安装扩展，删除后会重新下载；开启专家模式后可勾选' });
+  add({ path: path.join(libAS, 'Cursor', 'User', 'workspaceStorage'), category: 'AI 编程助手 · Cursor', label: 'Cursor 工作区状态', risk: 'expert', strategy: 'quarantine', selected: false, detail: '工作区缓存与状态；开启专家模式后可勾选' });
+  add({ path: path.join(libAS, 'Cursor', 'User', 'History'), category: 'AI 编程助手 · Cursor', label: 'Cursor 本地文件历史', risk: 'expert', strategy: 'quarantine', selected: false, detail: '本地文件历史记录；开启专家模式后可勾选' });
   add({ path: path.join(h, '.continue', 'index'), category: 'AI 编程助手 · Continue', label: 'Continue 代码索引', risk: 'caution', strategy: 'quarantine', selected: false, detail: '重建索引需重新嵌入代码库' });
-  add({ path: path.join(h, '.aider'), category: 'AI 编程助手 · Aider', label: 'Aider 数据目录', risk: 'expert', strategy: 'info', selected: false });
+  add({ path: path.join(h, '.aider'), category: 'AI 编程助手 · Aider', label: 'Aider 数据目录', risk: 'expert', strategy: 'quarantine', selected: false, detail: '会话与缓存数据；开启专家模式后可勾选' });
 
-  // ---- Local model weights (expert, report) ------------------------------
+  // ---- Local model weights (expert, selectable but never pre-selected) ----
   const models: Array<[string, string, string]> = [
     [path.join(base, '.ollama', 'models'), 'Ollama', 'Ollama 模型库'],
     [path.join(h, '.cache', 'huggingface'), 'Hugging Face', 'HF Hub 模型缓存'],
@@ -122,7 +124,7 @@ function rows(home: string): Row[] {
     [path.join(h, '.cache', 'vllm'), 'vLLM', 'vLLM 缓存'],
   ];
   for (const [p, category, label] of models) {
-    add({ path: p, category: `本地大模型 · ${category}`, label, risk: 'expert', strategy: 'info', selected: false, detail: '模型权重体积大，删除后需重新下载；如不再使用可手动勾选（移入回收站）' });
+    add({ path: p, category: `本地大模型 · ${category}`, label, risk: 'expert', strategy: 'quarantine', selected: false, detail: '模型权重体积大，删除后需重新下载；开启专家模式后可勾选，默认移入安全回收站（可还原）' });
   }
 
   // ---- AI desktop app caches --------------------------------------------
@@ -224,7 +226,7 @@ async function scan(ctx: Ctx): Promise<ModuleResult> {
     errors.push(String(e));
   }
 
-  notes.push('AI 会话记录、模型权重等「有价值的残留」默认不勾选，仅统计体积，避免误删历史与模型。');
+  notes.push('AI 会话记录、模型权重等「有价值的残留」默认不勾选；开启专家模式后可手动勾选，默认移入安全回收站（可还原），不会误删历史与模型。');
   return {
     module: 'ai-residue',
     title: 'AI 时代残留',

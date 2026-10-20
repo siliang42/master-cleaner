@@ -30,10 +30,10 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
   <img src="docs/screenshots/en/results.png" alt="Scan results" width="860">
 </p>
 
-**Language (follows the system by default) and disk details**
+**System monitor (the bottom-left button toggles `中` / `EN`) and disk details**
 
 <p align="center">
-  <img src="docs/screenshots/en/settings.png" alt="Settings" width="420">
+  <img src="docs/screenshots/en/monitor.png" alt="System monitor" width="420">
   &nbsp;
   <img src="docs/screenshots/en/disk.png" alt="Disk usage" width="420">
 </p>
@@ -43,6 +43,7 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
 - **Modular scanning** — AI residue, dev caches, system junk, app caches, app usage traces (keeps logins), containers, browser privacy, large files, duplicates, downloads, startup items, and macOS/Windows-specific residue.
 - **Risk levels** — `safe` / `caution` / `expert`. Expert-level items are never pre-selected; they appear only when they can actually be cleaned.
 - **Three dispositions** — safe vault (default, restorable), system trash, or permanent delete.
+- **System monitor & menu bar** — live CPU / memory / disk / temperature cards; the menu-bar logo switches language on a click and starts a quick clean on a double click.
 - **Scheduled cleaning** — built-in `mc daemon`, or hand off to launchd / schtasks / cron.
 - **Safety layer** — independent denylist + allowlist checks; out-of-scope paths are reported, never deleted.
 - **Local dashboard** — binds to `127.0.0.1` only, streams scan progress over SSE, and follows your system language on first run.

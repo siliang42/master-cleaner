@@ -22,6 +22,8 @@ const state = {
   view: 'scan',
   legalText: null,
   about: null,
+  modules: [],
+  itemEls: null,
 };
 
 function fmt(bytes) {
@@ -70,6 +72,7 @@ async function refreshState() {
   const subEl = $('#subtitle');
   if (subEl) subEl.textContent = `${s.os} · ${s.arch}`;
   $('#os-info').textContent = T('osInfo', { os: s.os, priv: s.elevated ? T('privilege.admin') : T('privilege.user'), version: s.version });
+  state.modules = s.modules;
   renderCategories(s.modules);
   renderSchedules();
   renderVault(s.vault);
@@ -252,13 +255,14 @@ function render() {
   const selBytes = items.filter((i) => state.selected.has(i.id)).reduce((a, i) => a + i.bytes, 0);
   $('#stats').innerHTML = `
     <div class="stat accent"><div class="k">${esc(T('stat.reclaim'))}</div><div class="v">${fmt(reclaim)}</div></div>
-    <div class="stat"><div class="k">${esc(T('stat.selected'))}</div><div class="v">${fmt(selBytes)}</div></div>
+    <div class="stat"><div class="k">${esc(T('stat.selected'))}</div><div class="v" id="stat-selected">${fmt(selBytes)}</div></div>
     <div class="stat"><div class="k">${esc(T('stat.reportOnly'))}</div><div class="v">${fmt(reportOnly)}</div></div>
     <div class="stat" title="${dupCount ? esc(T('dup.title', { n: dupCount })) : ''}"><div class="k">${esc(T('stat.items'))}</div><div class="v">${live.length}</div></div>
     <div class="stat"><div class="k">${esc(T('stat.elapsed'))}</div><div class="v">${((state.report.finishedAt - state.report.startedAt) / 1000).toFixed(1)}s</div></div>`;
 
   const results = $('#results');
   results.innerHTML = '';
+  state.itemEls = new Map();
   const shown = state.report.modules.filter((m) => m.items.length && (!state.filter || m.category === state.filter));
   if (!shown.length) {
     results.innerHTML = `<div class="empty"><h2>${esc(T('empty.noItems.title'))}</h2><p>${esc(T('empty.noItems.body'))}</p></div>`;
@@ -358,11 +362,13 @@ function renderItem(it) {
   const badge = it.risk !== 'safe' ? `<span class="badge ${it.risk}">${it.risk === 'caution' ? esc(T('badge.caution')) : esc(T('badge.expert'))}</span>` : `<span class="badge safe">${esc(T('badge.safe'))}</span>`;
   const info = it.strategy === 'info' ? `<span class="badge info">${esc(T('badge.info'))}</span>` : '';
   const dup = it.duplicate ? `<span class="badge dup" title="${esc(T('dup.hint'))}">${esc(T('badge.dup'))}</span>` : '';
+  const locked = it.risk === 'expert' && !state.expert && it.strategy !== 'info';
+  const unlock = locked ? '<button class="unlock" type="button" title="' + esc(T('expert.unlockTitle')) + '">' + esc(T('expert.unlock')) + '</button>' : '';
   const hasDetail = !!(it.detail || it.path);
   row.innerHTML = `
     <input class="check" type="checkbox" ${state.selected.has(it.id) ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
     <div>
-      <div class="label"><span class="name">${esc(L(it.label))}</span>${badge}${info}${dup}</div>
+      <div class="label"><span class="name">${esc(L(it.label))}</span>${badge}${info}${dup}${unlock}</div>
       ${hasDetail ? `<button class="detail-toggle">${esc(T('detail.show'))}</button><div class="meta">${esc(L(it.detail || it.path || ''))}</div>` : ''}
     </div>
     <div class="size">${it.bytes ? fmt(it.bytes) : ''}</div>`;
@@ -371,6 +377,10 @@ function renderItem(it) {
     if (cb.checked) state.selected.add(it.id); else state.selected.delete(it.id);
     updateActionbar();
   };
+  row.dataset.itemId = it.id;
+  if (state.itemEls) state.itemEls.set(it.id, row);
+  const ub = $('.unlock', row);
+  if (ub) ub.onclick = () => enableExpert();
   const dt = $('.detail-toggle', row);
   if (dt) dt.onclick = () => { row.classList.toggle('open'); dt.textContent = row.classList.contains('open') ? T('detail.hide') : T('detail.show'); };
   return row;
@@ -381,8 +391,115 @@ function updateActionbar() {
   const selBytes = items.filter((i) => state.selected.has(i.id)).reduce((a, i) => a + i.bytes, 0);
   $('#sel-count').textContent = T('sel.count', { n: state.selected.size });
   $('#sel-size').textContent = fmt(selBytes);
+  const selTile = $('#stat-selected');
+  if (selTile) selTile.textContent = fmt(selBytes);
   $('#actionbar').hidden = !state.report || state.selected.size === 0;
+  renderSelection();
 }
+/* ---------------- selection review: what will actually be cleaned ---------------- */
+function selItems() {
+  return selectedItems().filter((i) => state.selected.has(i.id));
+}
+
+function moduleTitleOf(id) {
+  const mods = (state.report && state.report.modules) || [];
+  const m = mods.find((x) => x.module === id || x.id === id);
+  return m ? L(m.title) : id;
+}
+
+function renderSelection() {
+  const box = $('#selection');
+  if (!box) return;
+  const show = state.view === 'scan' && !!state.report && state.selected.size > 0;
+  box.hidden = !show;
+  if (!show) { box.innerHTML = ''; return; }
+
+  const items = selItems().slice().sort((a, b) => (b.bytes || 0) - (a.bytes || 0));
+  const total = items.reduce((a, i) => a + (i.bytes || 0), 0);
+  const risky = items.filter((i) => i.risk !== 'safe').length;
+  const modeKey = state.mode === 'trash' ? 'seg.trash' : state.mode === 'delete' ? 'seg.delete' : 'seg.quarantine';
+
+  const groups = new Map();
+  for (const it of items) {
+    if (!groups.has(it.module)) groups.set(it.module, []);
+    groups.get(it.module).push(it);
+  }
+
+  let html = `<div class="sel-head">
+      <span class="sel-title">${esc(T('sel.heading'))}</span>
+      <span class="sel-sum">${esc(T('sel.summary', { n: items.length, bytes: fmt(total) }))}</span>
+      <span class="grow"></span>
+      <span class="sel-mode">${esc(T(modeKey))}</span>
+      <button class="linkish" type="button" data-sel-act="clear">${esc(T('sel.clear'))}</button>
+    </div>
+    <div class="sel-body">`;
+  for (const [mod, list] of groups) {
+    html += `<div class="sel-group">${esc(moduleTitleOf(mod))}</div>`;
+    for (const it of list) {
+      html += `<div class="sel-row" data-item-id="${esc(it.id)}" title="${esc(T('sel.locate'))}">
+        <span class="sel-dot ${esc(it.risk)}"></span>
+        <span class="sel-name">${esc(L(it.label))}</span>
+        <span class="sel-cat">${esc(L(it.category))}</span>
+        <span class="sel-size">${it.bytes ? fmt(it.bytes) : ''}</span>
+        <button class="sel-x" type="button" data-remove="${esc(it.id)}" title="${esc(T('sel.deselect'))}" aria-label="${esc(T('sel.deselect'))}">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+        </button>
+      </div>`;
+    }
+  }
+  html += '</div>';
+  if (risky) html += `<div class="sel-warn">${esc(T('sel.warn', { n: risky }))}</div>`;
+  box.innerHTML = html;
+}
+
+function syncCheckboxes() {
+  if (!state.itemEls) return;
+  for (const [id, el] of state.itemEls) {
+    const cb = $('.check', el);
+    if (cb) cb.checked = state.selected.has(id);
+  }
+}
+
+function deselectById(id) {
+  state.selected.delete(id);
+  const el = state.itemEls && state.itemEls.get(id);
+  const cb = el && $('.check', el);
+  if (cb) cb.checked = false;
+  updateActionbar();
+}
+
+function clearSelection() {
+  state.selected = new Set();
+  syncCheckboxes();
+  updateActionbar();
+}
+
+/* Expert items are never pre-selected; this unlocks them for deliberate manual
+ * selection without a re-scan (the report already contains them). */
+function enableExpert() {
+  state.expert = true;
+  const cb = $('#opt-expert');
+  if (cb) cb.checked = true;
+  render();
+}
+
+function locateItem(id) {
+  let el = state.itemEls && state.itemEls.get(id);
+  if (!el && state.filter) {
+    state.filter = null;
+    if (state.modules && state.modules.length) renderCategories(state.modules);
+    render();
+    el = state.itemEls && state.itemEls.get(id);
+  }
+  if (!el) return;
+  const mod = el.closest('.module');
+  if (mod) mod.classList.remove('collapsed');
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
 
 /* ---------------- clean ---------------- */
 async function doClean() {
@@ -574,13 +691,35 @@ function setView(v) {
   $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === v));
   $$('.view').forEach((el) => (el.hidden = el.id !== 'view-' + v));
   $('#actionbar').hidden = v !== 'scan' || !state.report || state.selected.size === 0;
+  renderSelection();
   if (v === 'schedule') renderSchedModuleChips();
 }
 
 function init() {
   $('#btn-scan').onclick = runScan;
   $('#btn-clean').onclick = doClean;
-  $('#opt-expert').onchange = (e) => { state.expert = e.target.checked; if (state.report) runScan(); };
+  const langBtn = $('#btn-lang');
+  if (langBtn) {
+    const target = (window.I18N && window.I18N.locale) === 'en' ? 'zh-CN' : 'en';
+    const lbl = $('#btn-lang-label');
+    if (lbl) lbl.textContent = target === 'en' ? 'EN' : '中';
+    langBtn.title = target === 'en' ? 'English' : '简体中文';
+    langBtn.setAttribute('aria-label', target === 'en' ? 'Switch to English' : '切换到中文');
+    langBtn.hidden = false;
+    langBtn.onclick = () => setLanguage(target);
+  }
+  const selBox = $('#selection');
+  if (selBox) {
+    selBox.onclick = (e) => {
+      const rm = e.target.closest('[data-remove]');
+      if (rm) { deselectById(rm.getAttribute('data-remove')); return; }
+      if (e.target.closest('[data-sel-act="clear"]')) { clearSelection(); return; }
+      const row = e.target.closest('.sel-row');
+      if (row && row.dataset.itemId) locateItem(row.dataset.itemId);
+    };
+  }
+
+  $('#opt-expert').onchange = (e) => { state.expert = e.target.checked; if (state.report) render(); };
   $$('.tab').forEach((t) => (t.onclick = () => setView(t.dataset.view)));
   $$('.seg[data-mode]').forEach((s) => (s.onclick = () => { state.mode = s.dataset.mode; $$('.seg[data-mode]').forEach((x) => x.classList.toggle('active', x === s)); }));
   initSort();
@@ -600,7 +739,8 @@ function init() {
   };
   $('#btn-purge').onclick = async () => {
     const res = await api('/api/vault/purge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ olderThan: 30 }) });
-    toast(T('toast.vaultPurged'), T('purged.body', { bytes: res.bytesHuman }));
+    if (res.count) toast(T('toast.vaultPurged'), T('purged.body', { n: res.count, bytes: res.bytesHuman }));
+    else toast(T('toast.vaultPurgeNone'), T('purged.none', { days: 30 }));
     refreshState();
   };
   const aboutBtn = $('#btn-about');
