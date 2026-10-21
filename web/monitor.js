@@ -3,6 +3,7 @@
 (function () {
   const T = (k, p) => (window.I18N ? window.I18N.t(k, p) : k);
   const REFRESH = 3000;
+  let timer = null;
   const S = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"';
   const ICONS = {
     cpu: '<svg viewBox="0 0 24 24" ' + S + '><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>',
