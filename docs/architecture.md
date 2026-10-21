@@ -20,7 +20,7 @@ flowchart TB
   Engine --> Sched["Scheduler (scheduler.ts)"]
   Engine --> Platform["Platform (platform.ts)"]
   Engine --> Registry["Module registry (modules/index.ts)"]
-  Registry --> Mods["ai · dev · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
+  Registry --> Mods["ai · dev · project · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
 ```
 
 Principle: **modules propose candidates → the engine decides → the safety layer backstops.** Modules never delete.
@@ -75,6 +75,10 @@ The Vault view shows the vault's real on-disk footprint, because "moved into the
 - `~/Library/Application Support/<app>/update/update_downloading` — stale update packages.
 
 Safety model: every candidate is allow-listed by name, gated by age, and grouped per app so only the newest copy is kept. A report-only overview lists the `X/C/T` totals plus the vault's own footprint, and APFS copy-on-write caveats are surfaced so shared blocks are not counted as reclaimed space.
+
+## Project work residue
+
+`project-residue` (`src/modules/project-residue.ts`) walks the project roots found under the scan roots (`.git` or a build manifest marks a project) and surfaces only high-confidence, non-source debris: `.DS_Store`, Vim swap files, `*.orig`/`*.rej`/`*~` (pre-selected), plus backups, project logs and crash dumps (caution, never pre-selected). Inside agent tool dirs (`.claude`, `.codex`, `.cursor`, …) only allow-listed scratch sub-directories (`cache`, `tmp`, `logs`, `shell-snapshots`, …) become candidates; settings, commands, memory, skills, rules and worktrees are never touched, and names that look like credentials / sessions / keys are skipped and counted as protected. Git worktrees found under agent dirs are reported read-only.
 
 ## Scheduler (`src/core/scheduler.ts`)
 

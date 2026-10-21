@@ -13,11 +13,13 @@ import { windowsModule } from './windows';
 import { appsModule } from './apps';
 import { appTracesModule } from './app-traces';
 import { hiddenSpaceModule } from './hidden-space';
+import { projectResidueModule } from './project-residue';
 
 /** Registry of all scan modules in display order. */
 export const ALL_MODULES: CleanerModule[] = [
   aiModule,
   devModule,
+  projectResidueModule,
   systemModule,
   hiddenSpaceModule,
   appsModule,

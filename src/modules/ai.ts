@@ -1,6 +1,6 @@
 import path from 'path';
 import fs from 'fs';
-import { mkItem, sumSizes, findMarkerDirsSync } from './helpers';
+import { mkItem, sumSizes } from './helpers';
 import { exists, dirSize, formatBytes } from '../core/util';
 import type { CleanerModule, Ctx, ModuleResult, CandidateItem } from '../core/types';
 
@@ -153,43 +153,6 @@ function rows(home: string): Row[] {
   return out;
 }
 
-async function scanProjectResidues(roots: string[], maxDepth = 3): Promise<CandidateItem[]> {
-  const markers = ["'.claude'", "'.codex'", "'.cursor'", "'.continue'", "'.specstory'", "'.windsurf'"];
-  const found: Array<{ marker: string; path: string }> = [];
-  for (const r of roots) {
-    if (r === path.dirname(r)) continue;
-    for (const hit of findMarkerDirsSync(r, markers, maxDepth)) found.push({ marker: hit.marker, path: hit.path });
-  }
-  const byMarker = new Map<string, string[]>();
-  for (const f of found) {
-    const arr = byMarker.get(f.marker) ?? [];
-    arr.push(f.path);
-    byMarker.set(f.marker, arr);
-  }
-  const items: CandidateItem[] = [];
-  for (const [marker, paths] of byMarker) {
-    const s = await sumSizes(paths);
-    if (s.bytes <= 0) continue;
-    items.push(
-      mkItem({
-        module: 'ai-residue',
-        category: '项目内 AI 残留',
-        label: `项目中的 ${marker} 目录（${paths.length} 个）`,
-        detail: paths.slice(0, 8).join("\n") + (paths.length > 8 ? `\n... 等 ${paths.length} 个` : ""),
-        paths,
-        kind: 'group',
-        bytes: s.bytes,
-        count: paths.length,
-        risk: 'caution',
-        defaultSelected: false,
-        strategy: 'quarantine',
-        meta: { marker, sample: paths.slice(0, 8) },
-      }),
-    );
-  }
-  return items;
-}
-
 async function scan(ctx: Ctx): Promise<ModuleResult> {
   const items: CandidateItem[] = [];
   const notes: string[] = [];
@@ -218,15 +181,8 @@ async function scan(ctx: Ctx): Promise<ModuleResult> {
     }
   }
 
-  try {
-    const project = await scanProjectResidues(ctx.opts.roots, 3);
-    items.push(...project);
-    if (project.length) notes.push(`在扫描根目录下发现 ${project.length} 类项目级 AI 残留（默认不勾选）。`);
-  } catch (e) {
-    errors.push(String(e));
-  }
-
   notes.push('AI 会话记录、模型权重等「有价值的残留」默认不勾选；开启专家模式后可手动勾选，默认移入安全回收站（可还原），不会误删历史与模型。');
+  notes.push('项目内的 agent 残留由「项目工作残留」模块处理：只清理可再生的缓存子目录，配置、命令、记忆与 skills 保持不变。');
   return {
     module: 'ai-residue',
     title: 'AI 时代残留',

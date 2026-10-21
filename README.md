@@ -46,7 +46,7 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
 
 ## Features
 
-- **Modular scanning** — AI residue, dev caches, system junk, macOS hidden space (signature clones, updater residue, Clipboard archives), app caches, app usage traces (keeps logins), containers, browser privacy, large files, duplicates, downloads, startup items, and macOS/Windows-specific residue.
+- **Modular scanning** — AI residue, dev caches, project residue (agent leftovers, logs, backups, swap/merge debris), system junk, macOS hidden space (signature clones, updater residue, Clipboard archives), app caches, app usage traces (keeps logins), containers, browser privacy, large files, duplicates, downloads, startup items, and macOS/Windows-specific residue.
 - **Honest accounting** — the vault's real on-disk footprint is shown in the Vault view, and APFS copy-on-write caveats are stated so "reclaimable" is never oversold.
 - **Risk levels** — `safe` / `caution` / `expert`. Expert-level items are never pre-selected; they appear only when they can actually be cleaned.
 - **Three dispositions** — safe vault (default, restorable), system trash, or permanent delete.
@@ -62,6 +62,7 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
 | --- | --- | --- | --- |
 | `ai-residue` | AI | mixed | Claude Code / Codex / Cursor / Aider … caches, logs, sessions, local model stores, AI desktop apps |
 | `dev-caches` | Developer | safe | npm/pnpm/pip/cargo/gradle caches, Xcode artifacts, project build dirs |
+| `project-residue` | Developer | safe | Non-source debris inside projects: editor/merge leftovers, backups, logs, crash dumps, agent tool caches, Playwright session output |
 | `system-junk` | System | safe | OS caches, logs, crash reports, temp files (macOS/Linux/Windows variants) |
 | `hidden-space` | System | safe | macOS hidden space: code-signature clones, updater residue, Universal Clipboard archives, compiler caches, stale update downloads |
 | `app-leftovers` | Apps | expert | Installed programs, uninstall info, leftover caches/preferences |

@@ -20,7 +20,7 @@ flowchart TB
   Engine --> Sched["调度器 (scheduler.ts)"]
   Engine --> Platform["平台 (platform.ts)"]
   Engine --> Registry["模块注册表 (modules/index.ts)"]
-  Registry --> Mods["ai · dev · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
+  Registry --> Mods["ai · dev · project · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
 ```
 
 原则：**模块只“提出候选”，引擎做决策，安全层做兜底**。模块本身不删除任何东西。
@@ -42,7 +42,7 @@ CLI (src/cli.ts)          Web 仪表盘 (web/*) + 本地服务 (src/server.ts)
                  |
             模块注册表 modules/index.ts
                  |
-  ai / dev / system / hidden / apps / containers / privacy /
+  ai / dev / project / system / hidden / apps / containers / privacy /
   files(large+dup) / downloads / bins / startup /
   macos / windows
 ```
@@ -103,6 +103,17 @@ CLI (src/cli.ts)          Web 仪表盘 (web/*) + 本地服务 (src/server.ts)
 安全模型：候选一律按名称白名单 + 年龄门槛筛选，并按应用分组，只保留最新一份。
 报告项汇总 `X/C/T` 总量与回收站自身占用，同时标注 APFS 写时复制影响，
 避免把共享块算作已释放空间。
+
+## 项目工作残留
+
+`project-residue`（`src/modules/project-residue.ts`）在扫描根下寻找项目
+（以 `.git` 或构建清单文件为标志），只列出高置信度、与源码无关的残片：
+`.DS_Store`、Vim 交换文件、`*.orig`/`*.rej`/`*~`（默认勾选），以及备份、
+项目日志与崩溃转储（caution，默认不勾选）。agent 工具目录（`.claude`、
+`.codex`、`.cursor` 等）内只清理白名单的临时子目录（`cache`、`tmp`、
+`logs`、`shell-snapshots` 等）；settings、commands、memory、skills、
+rules 与 worktrees 不会被触碰，名称疑似凭据 / 会话 / 密钥的文件会被跳过
+并计入保护数量。agent 目录下发现的 git worktree 仅做只读报告。
 
 ## 调度（src/core/scheduler.ts）
 
