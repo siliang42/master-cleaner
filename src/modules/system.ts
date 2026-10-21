@@ -81,11 +81,14 @@ async function macScan(ctx: Ctx): Promise<ModuleResult> {
     if (s.bytes > 0) items.push(mkItem({ module: 'system-junk', category: '应用状态', label: '保存的应用恢复状态', path: sas, bytes: s.bytes, count: s.count, risk: 'safe', defaultSelected: true, strategy: 'quarantine' }));
   }
 
-  // User temp dir ($TMPDIR -> /private/var/folders/...)
+  // User temp dir ($TMPDIR -> /private/var/folders/...). Report-only: the
+  // whole directory is shared with every running app, so moving it wholesale
+  // can break live sessions. Concrete, age-gated residue inside it is cleaned
+  // item by item by the `hidden-space` module instead.
   const tmp = os.tmpdir();
   if (exists(tmp)) {
     const s = await sumSizes([tmp]);
-    items.push(mkItem({ module: 'system-junk', category: '系统临时文件', label: `用户临时目录 (${tmp.replace(home, '~')})`, path: tmp, bytes: s.bytes, count: s.count, risk: 'caution', defaultSelected: false, strategy: 'quarantine', detail: '本次会话的临时文件；正在运行的程序可能仍在使用' }));
+    items.push(mkItem({ module: 'system-junk', category: '系统临时文件', label: `用户临时目录占用（${formatBytes(s.bytes)}）`, bytes: s.bytes, count: s.count, risk: 'caution', defaultSelected: false, strategy: 'info', detail: '这是所有正在运行的程序共享的会话临时区；由「macOS 隐藏空间」模块逐项清理其中的过期残留，比整目录移动更安全。' }));
   }
 
   const elevated = await isElevated();

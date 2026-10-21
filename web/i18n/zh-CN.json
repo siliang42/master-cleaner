@@ -50,6 +50,8 @@
     "mode.delete": "永久删除",
     "vault.title": "安全回收站",
     "vault.intro": "清理默认是「移动」而非删除，可随时还原。保留 30 天后可批量清除。",
+    "vault.usage": "当前隔离占用 {bytes} · {runs} 批",
+    "vault.hint": "清除后才会真正释放磁盘空间；需要时可逐批还原。",
     "vault.purge": "清理 30 天前的记录",
     "legal.aria": "关于与许可",
     "about": "关于",

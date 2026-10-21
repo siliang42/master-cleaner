@@ -19,6 +19,7 @@ const state = {
   filter: null,
   schedules: [],
   vault: [],
+  vaultBytesHuman: '',
   view: 'scan',
   legalText: null,
   about: null,
@@ -67,6 +68,7 @@ async function refreshState() {
   const s = await api('/api/state');
   state.schedules = s.schedules;
   state.vault = s.vault.runs;
+  state.vaultBytesHuman = s.vault.bytesHuman;
   state.disk = s.disk;
   updateDiskBar();
   const subEl = $('#subtitle');
@@ -568,6 +570,12 @@ function renderSchedModuleChips() {
 function renderVault(v) {
   const box = $('#vault-list');
   const runs = v.runs || state.vault || [];
+  const stats = $('#vault-stats');
+  if (stats) {
+    stats.innerHTML = runs.length
+      ? `<span class="vault-usage">${esc(T('vault.usage', { bytes: v.bytesHuman || state.vaultBytesHuman || '0 B', runs: runs.length }))}</span><span class="muted small">${esc(T('vault.hint'))}</span>`
+      : '';
+  }
   if (!runs.length) {
     box.innerHTML = `<div class="muted">${esc(T('vault.empty'))}</div>`;
     return;

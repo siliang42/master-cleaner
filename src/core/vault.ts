@@ -2,7 +2,20 @@ import fs from 'fs';
 import fsp from 'fs/promises';
 import path from 'path';
 import { vaultDir, dataDir } from './paths';
-import { ensureDir, dirSize, formatBytes } from './util';
+import { ensureDir, dirSize, formatBytes, runCmd } from './util';
+
+/**
+ * Cached on-disk size of the vault. Computing it walks tens of thousands of
+ * files, and `/api/state` asks for it on every request — without a cache the
+ * first dashboard paint waits on a full directory traversal (seconds on a
+ * multi-GB vault). Any mutation invalidates the cache.
+ */
+const VAULT_BYTES_TTL = 30_000;
+let vaultBytesCache: { at: number; bytes: number } | null = null;
+
+function invalidateVaultBytes(): void {
+  vaultBytesCache = null;
+}
 
 /**
  * The Vault is Master Cleaner's own recycle bin. Instead of hard-deleting, the
@@ -134,6 +147,7 @@ export class Vault {
     else all.push(run);
     await ensureDir(dataDir());
     await fsp.writeFile(manifestPath, JSON.stringify(all, null, 2), 'utf8');
+    invalidateVaultBytes();
   }
 
   async runs(): Promise<VaultRun[]> {
@@ -147,7 +161,19 @@ export class Vault {
   }
 
   async totalBytes(): Promise<number> {
-    return (await dirSize(vaultDir())).bytes;
+    const now = Date.now();
+    if (vaultBytesCache && now - vaultBytesCache.at < VAULT_BYTES_TTL) return vaultBytesCache.bytes;
+    let bytes = 0;
+    if (process.platform !== 'win32') {
+      // `du` may exit non-zero on a permission-denied child while still
+      // reporting a valid total for everything it could read.
+      const r = await runCmd('du', ['-sk', vaultDir()], { timeoutMs: 60_000 });
+      const m = r.stdout.match(/^(\d+)/);
+      if (m) bytes = parseInt(m[1], 10) * 1024;
+    }
+    if (!bytes) bytes = (await dirSize(vaultDir())).bytes;
+    vaultBytesCache = { at: now, bytes };
+    return bytes;
   }
 
   async restore(runId: string): Promise<{ restored: number; errors: string[] }> {
@@ -190,6 +216,7 @@ export class Vault {
     }
     await fsp.writeFile(path.join(dataDir(), 'vault-manifest.json'), JSON.stringify(all, null, 2), 'utf8');
     if (!failed.length) await fsp.rm(runDir(runId), { recursive: true, force: true });
+    invalidateVaultBytes();
     return { restored, errors };
   }
 
@@ -200,6 +227,7 @@ export class Vault {
       await fsp.rm(runDir(r.id), { recursive: true, force: true }).catch(() => undefined);
     }
     await fsp.writeFile(path.join(dataDir(), 'vault-manifest.json'), '[]', 'utf8');
+    invalidateVaultBytes();
     return bytes;
   }
 
@@ -218,6 +246,7 @@ export class Vault {
       }
     }
     await fsp.writeFile(path.join(dataDir(), 'vault-manifest.json'), JSON.stringify(keep, null, 2), 'utf8');
+    invalidateVaultBytes();
     return bytes;
   }
 

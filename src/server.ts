@@ -71,6 +71,8 @@ async function statePayload() {
   const store = new ScheduleStore();
   const schedules = (await store.list()).map((s) => ({ ...s, nextRun: nextRun(s.cron), description: localize(describeCron(s.cron)) }));
   const cfg = await loadConfig();
+  const vaultBytes = await vault.totalBytes();
+  const vaultRuns = (await vault.runs()).slice(0, 20);
   return {
     version: LEGAL.version,
     locale: getLocale(),
@@ -81,7 +83,7 @@ async function statePayload() {
     home: os.homedir(),
     dataDir: dataDir(),
     disk: { ...disk, totalHuman: formatBytes(disk.total), usedHuman: formatBytes(disk.used), freeHuman: formatBytes(disk.free) },
-    vault: { bytes: await vault.totalBytes(), bytesHuman: formatBytes(await vault.totalBytes()), runs: (await vault.runs()).slice(0, 20) },
+    vault: { bytes: vaultBytes, bytesHuman: formatBytes(vaultBytes), runs: vaultRuns },
     schedules,
     config: cfg,
     modules: allModules().map((m) => ({

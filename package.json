@@ -41,7 +41,9 @@
     "dist": "npm run build && electron-builder --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never"
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "sign:mac": "node scripts/adhoc-sign.js",
+    "install:mac": "npm run dist:mac && node scripts/install-mac.js"
   },
   "engines": {
     "node": ">=18"
@@ -55,6 +57,7 @@
   "build": {
     "appId": "cc.ebonex.master-cleaner",
     "productName": "Master Cleaner",
+    "afterPack": "scripts/adhoc-sign.js",
     "directories": {
       "output": "release",
       "buildResources": "build"

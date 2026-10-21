@@ -12,12 +12,14 @@ import { macosModule } from './macos';
 import { windowsModule } from './windows';
 import { appsModule } from './apps';
 import { appTracesModule } from './app-traces';
+import { hiddenSpaceModule } from './hidden-space';
 
 /** Registry of all scan modules in display order. */
 export const ALL_MODULES: CleanerModule[] = [
   aiModule,
   devModule,
   systemModule,
+  hiddenSpaceModule,
   appsModule,
   appTracesModule,
   containersModule,

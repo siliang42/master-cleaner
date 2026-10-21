@@ -30,6 +30,12 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
   <img src="docs/screenshots/en/results.png" alt="Scan results" width="860">
 </p>
 
+**Safe vault — the real on-disk footprint, with per-batch restore**
+
+<p align="center">
+  <img src="docs/screenshots/en/vault.png" alt="Safe vault with live disk footprint" width="860">
+</p>
+
 **System monitor (the bottom-left button toggles `中` / `EN`) and disk details**
 
 <p align="center">
@@ -40,7 +46,8 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
 
 ## Features
 
-- **Modular scanning** — AI residue, dev caches, system junk, app caches, app usage traces (keeps logins), containers, browser privacy, large files, duplicates, downloads, startup items, and macOS/Windows-specific residue.
+- **Modular scanning** — AI residue, dev caches, system junk, macOS hidden space (signature clones, updater residue, Clipboard archives), app caches, app usage traces (keeps logins), containers, browser privacy, large files, duplicates, downloads, startup items, and macOS/Windows-specific residue.
+- **Honest accounting** — the vault's real on-disk footprint is shown in the Vault view, and APFS copy-on-write caveats are stated so "reclaimable" is never oversold.
 - **Risk levels** — `safe` / `caution` / `expert`. Expert-level items are never pre-selected; they appear only when they can actually be cleaned.
 - **Three dispositions** — safe vault (default, restorable), system trash, or permanent delete.
 - **System monitor & menu bar** — live CPU / memory / disk / temperature cards; the menu-bar logo switches language on a click and starts a quick clean on a double click.
@@ -56,6 +63,7 @@ Master Cleaner is a **local-first** disk cleanup tool for developers and AI-era 
 | `ai-residue` | AI | mixed | Claude Code / Codex / Cursor / Aider … caches, logs, sessions, local model stores, AI desktop apps |
 | `dev-caches` | Developer | safe | npm/pnpm/pip/cargo/gradle caches, Xcode artifacts, project build dirs |
 | `system-junk` | System | safe | OS caches, logs, crash reports, temp files (macOS/Linux/Windows variants) |
+| `hidden-space` | System | safe | macOS hidden space: code-signature clones, updater residue, Universal Clipboard archives, compiler caches, stale update downloads |
 | `app-leftovers` | Apps | expert | Installed programs, uninstall info, leftover caches/preferences |
 | `app-traces` | Apps | caution | Chat/social/collaboration app traces (keeps logins & chat records) |
 | `containers` | Containers | expert | Docker / Podman / Colima / OrbStack / WSL images, layers, build cache, VM disks |
@@ -104,6 +112,23 @@ All commands accept `--lang zh-CN|en`; the language defaults to your system loca
 `npm run desktop` launches the Electron shell, which boots the same local server and loads the dashboard in a sandboxed window. `npm run dist:mac` / `dist:win` / `dist:linux` produce installers via electron-builder.
 
 On macOS the app menu exposes **Preferences… (⌘,)** which opens the in-app settings (language, and future options). The `CmdOrCtrl+,` shortcut also works in the browser dashboard.
+
+Use `npm run install:mac` on a Mac to package, ad-hoc sign, install into `/Applications`, and remove the build-tree copy (see below).
+
+## macOS signing & folder permissions
+
+Every macOS bundle produced by `npm run dist:mac` is **ad-hoc signed** right after packing (`scripts/adhoc-sign.js`, wired in as electron-builder's `afterPack` hook). This is a deliberate stop-gap, not a substitute for Developer ID signing:
+
+- **Why it exists** — macOS stores folder-access grants (TCC) against the app's code signature. Earlier builds shipped with no bundle signature at all (`Identifier=Electron`, `Info.plist=not bound`), so the system had no stable identity to record "Allow" against and asked again for Documents/Desktop/Downloads/… on every scan.
+- **What it fixes** — the signed bundle binds `Info.plist`, exposes a real identity (`cc.ebonex.master-cleaner`), and a given build stops re-prompting once you have granted access. The first scan of a new build still asks once per protected folder — that is normal macOS behaviour, one dialog per folder.
+- **What it does not fix** — an ad-hoc signature's designated requirement is the build's CDHash, so **every new build needs one fresh permission grant**; it cannot inherit grants across builds the way a Developer ID signature would. Ad-hoc builds also do not pass Gatekeeper when downloaded, so a Release `.dmg` still needs the usual right-click → Open (or System Settings → Privacy & Security → Open Anyway).
+
+Practical rules on macOS:
+
+1. Install with `npm run install:mac`: it packages, signs, replaces `/Applications/Master Cleaner.app`, and deletes the build-tree copy so only one runnable bundle remains.
+2. Always launch the `/Applications` copy. Do not run the app from `release/`, a mounted `.dmg`, or an unzipped download folder — each location is a separate app identity and prompts again.
+3. Grant each folder prompt once per build (Documents, Desktop, Downloads, Movies, Pictures). Review or revoke them anytime under System Settings → Privacy & Security → Files and Folders.
+4. Set `MC_SKIP_ADHOC_SIGN=1` once real Developer ID signing + notarization replaces this stop-gap.
 
 ## Localization
 

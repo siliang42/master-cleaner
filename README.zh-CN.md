@@ -30,6 +30,12 @@ Master Cleaner 是一款**本地优先**的磁盘清理工具，面向开发者�
   <img src="docs/screenshots/zh/results.png" alt="扫描结果" width="860">
 </p>
 
+**安全回收站：隔离内容的真实磁盘占用，可按批次还原**
+
+<p align="center">
+  <img src="docs/screenshots/zh/vault.png" alt="安全回收站与实时占用" width="860">
+</p>
+
 **系统监控（左下角按钮在「中 / EN」之间互切）与磁盘详情**
 
 <p align="center">
@@ -40,7 +46,8 @@ Master Cleaner 是一款**本地优先**的磁盘清理工具，面向开发者�
 
 ## 特性
 
-- **模块化扫描**：AI 残留、开发缓存、系统垃圾、应用缓存、应用使用痕迹（保留登录）、容器、浏览器隐私、大文件、重复文件、下载目录、启动项，以及 macOS / Windows 专有项。
+- **模块化扫描**：AI 残留、开发缓存、系统垃圾、macOS 隐藏空间（签名克隆、更新器残留、共享粘贴板归档）、应用缓存、应用使用痕迹（保留登录）、容器、浏览器隐私、大文件、重复文件、下载目录、启动项，以及 macOS / Windows 专有项。
+- **诚实的空间计量**：回收站页直接显示隔离内容的真实磁盘占用，并明确标注 APFS 写时复制对「可释放」数字的影响，不夸大清理效果。
 - **风险分级**：`safe` / `caution` / `expert`。专家级项目默认不勾选，且仅在确实可清理时才出现。
 - **三种处置方式**：安全回收站（默认，可还原）、系统回收站、永久删除。
 - **系统监控与菜单栏**：CPU / 内存 / 磁盘 / 温度实时卡片；菜单栏图标单击切换语言、双击快速清理。
@@ -56,6 +63,7 @@ Master Cleaner 是一款**本地优先**的磁盘清理工具，面向开发者�
 | `ai-residue` | AI | 混合 | Claude Code / Codex / Cursor / Aider 等缓存、日志、会话，本地模型库，AI 桌面应用 |
 | `dev-caches` | 开发者 | safe | npm/pnpm/pip/cargo/gradle 缓存、Xcode 产物、项目构建目录 |
 | `system-junk` | 系统 | safe | 系统缓存、日志、崩溃报告、临时文件（macOS/Linux/Windows 变体） |
+| `hidden-space` | 系统 | safe | macOS 隐藏空间：代码签名克隆、更新器残留、共享粘贴板归档、编译缓存、失效更新包 |
 | `app-leftovers` | 应用 | expert | 已安装程序、卸载信息、残留缓存与偏好设置 |
 | `app-traces` | 应用 | caution | 聊天/社交/协作应用的使用痕迹（保留登录与聊天记录） |
 | `containers` | 容器 | expert | Docker / Podman / Colima / OrbStack / WSL 的镜像、层、构建缓存、虚拟机磁盘 |
@@ -104,6 +112,23 @@ mc legal                       # 查看许可、署名与免责声明
 `npm run desktop` 启动 Electron 外壳：主进程拉起同一个本地服务，并在沙箱窗口中加载仪表盘。`npm run dist:mac` / `dist:win` / `dist:linux` 通过 electron-builder 生成安装包。
 
 macOS 上应用菜单提供 **偏好设置…（⌘,）**，打开应用内设置（语言，以及后续选项）。浏览器版同样支持 `Cmd/Ctrl + ,` 打开设置。
+
+Mac 上可用 `npm run install:mac` 一键打包、ad-hoc 签名、安装到 `/Applications`，并删除构建目录里的副本（详见下文）。
+
+## macOS 签名与目录权限
+
+从当前构建流程起，`npm run dist:mac` 产出的每个 macOS 包都会在打包完成后自动做一次 **ad-hoc 签名**（由 `scripts/adhoc-sign.js` 挂到 electron-builder 的 `afterPack` 钩子上）。这是过渡方案，不能替代 Developer ID 正式签名：
+
+- **为什么需要** —— macOS 的文件访问授权（TCC）按应用的代码签名保存。早期构建完全没有 bundle 签名（`Identifier=Electron`、`Info.plist=not bound`），系统无法持久保存「允许」，于是每次扫描都会重新询问 Documents/Desktop/Downloads 等目录。
+- **解决了什么** —— 签名后的应用会绑定 `Info.plist`、拥有稳定的应用身份（`cc.ebonex.master-cleaner`），同一份构建授权一次后不再反复弹窗。新构建的第一次扫描仍会为每个受保护目录各弹一次——这是 macOS 的正常行为，一个目录一次。
+- **没解决什么** —— ad-hoc 签名的 designated requirement 是本构建的 CDHash，因此**每次安装新构建都需要重新授权一次**，无法像 Developer ID 签名那样跨构建继承授权。ad-hoc 包也无法通过 Gatekeeper 校验，从 Releases 下载的 `.dmg` 仍需右键「打开」（或系统设置 → 隐私与安全性 → 「仍要打开」）。
+
+macOS 使用建议：
+
+1. 用 `npm run install:mac` 安装：它会自动打包、签名、替换 `/Applications/Master Cleaner.app`，并删除构建目录里的副本，保证系统里只有一份可运行的应用。
+2. 始终启动 `/Applications` 里的那一份。不要直接运行 `release/`、挂载的 `.dmg` 或解压目录中的副本——不同位置会被系统当作不同应用，各自重新弹授权。
+3. 每个构建把各目录弹窗授权一次（Documents、Desktop、Downloads、Movies、Pictures）；可随时在 系统设置 → 隐私与安全性 → 文件与文件夹 中查看或撤销。
+4. 未来接入 Developer ID 签名与公证后，设置 `MC_SKIP_ADHOC_SIGN=1` 跳过这一步。
 
 ## 多语言
 

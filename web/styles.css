@@ -270,6 +270,8 @@ main { padding: 20px 24px 96px; min-width: 0; }
 .list-row .grow { flex: 1; min-width: 0; }
 .list-row .name { font-weight: 600; }
 .row-actions { display: flex; gap: 10px; margin: 12px 0; }
+.vault-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 2px 0 6px; }
+.vault-stats .vault-usage { font-weight: 600; color: var(--text); }
 
 /* ---------- toast ---------- */
 .toast { position: fixed; right: 20px; bottom: 84px; z-index: 40; display: grid; grid-template-columns: 22px 1fr auto; align-items: start; gap: 10px; width: min(368px, calc(100vw - 40px)); background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 12px 12px 14px; box-shadow: 0 14px 34px rgba(0,0,0,.5); opacity: 0; transform: translateY(8px); }

@@ -20,7 +20,7 @@ flowchart TB
   Engine --> Sched["Scheduler (scheduler.ts)"]
   Engine --> Platform["Platform (platform.ts)"]
   Engine --> Registry["Module registry (modules/index.ts)"]
-  Registry --> Mods["ai · dev · system · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
+  Registry --> Mods["ai · dev · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
 ```
 
 Principle: **modules propose candidates → the engine decides → the safety layer backstops.** Modules never delete.
@@ -61,6 +61,20 @@ Two independent rules:
 ## Restorable vault (`src/core/vault.ts`)
 
 The default `quarantine` strategy **moves** files into `~/.master-cleaner/vault/<runId>/files/` and writes a `vault-manifest.json` mapping `original -> stored`. Supported by `mc restore <runId>` and `mc vault purge [--older-than N]`. Cross-device moves fall back to copy + delete.
+
+The Vault view shows the vault's real on-disk footprint, because "moved into the vault" is not the same as "space freed". `/api/state` serves a 30-second cached size (fast `du`, invalidated on save/restore/purge), so the dashboard never blocks on walking the vault.
+
+## Hidden space (macOS)
+
+`hidden-space` (`src/modules/hidden-space.ts`) covers the per-user volume under `/private/var/folders` that ordinary cleaners never enter:
+
+- `X/<bundle>.code_sign_clone/…` — Gatekeeper verification copies (often GB each);
+- `T/*.ShipIt.*` — staging dirs left by interrupted app updaters;
+- `T/com.apple.useractivityd/…/archives` — Universal Clipboard archives;
+- `C/clang`, `C/com.apple.metal` — regenerable compiler / shader caches;
+- `~/Library/Application Support/<app>/update/update_downloading` — stale update packages.
+
+Safety model: every candidate is allow-listed by name, gated by age, and grouped per app so only the newest copy is kept. A report-only overview lists the `X/C/T` totals plus the vault's own footprint, and APFS copy-on-write caveats are surfaced so shared blocks are not counted as reclaimed space.
 
 ## Scheduler (`src/core/scheduler.ts`)
 

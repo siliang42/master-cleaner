@@ -66,7 +66,14 @@ function buildDenylist(platform: NodeJS.Platform): string[] {
 function buildAllowlist(platform: NodeJS.Platform): string[] {
   const list = [HOME, os.tmpdir()];
   if (platform === 'darwin') {
-    list.push('/private/var/folders', '/tmp', '/var/tmp', '/Library/Caches', '/Library/Logs');
+    list.push(
+      '/private/var/folders',
+      '/var/folders', // macOS /var is a symlink to /private/var; Node's os.tmpdir() reports the /var form
+      '/tmp',
+      '/var/tmp',
+      '/Library/Caches',
+      '/Library/Logs',
+    );
   } else if (platform === 'win32') {
     if (process.env.Temp) list.push(process.env.Temp);
     if (process.env.TMP) list.push(process.env.TMP);

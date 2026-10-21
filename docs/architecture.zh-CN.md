@@ -20,7 +20,7 @@ flowchart TB
   Engine --> Sched["调度器 (scheduler.ts)"]
   Engine --> Platform["平台 (platform.ts)"]
   Engine --> Registry["模块注册表 (modules/index.ts)"]
-  Registry --> Mods["ai · dev · system · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
+  Registry --> Mods["ai · dev · system · hidden · apps · containers · privacy · files(large+dup) · downloads · bins · startup · macos · windows"]
 ```
 
 原则：**模块只“提出候选”，引擎做决策，安全层做兜底**。模块本身不删除任何东西。
@@ -42,7 +42,7 @@ CLI (src/cli.ts)          Web 仪表盘 (web/*) + 本地服务 (src/server.ts)
                  |
             模块注册表 modules/index.ts
                  |
-  ai / dev / system / apps / containers / privacy /
+  ai / dev / system / hidden / apps / containers / privacy /
   files(large+dup) / downloads / bins / startup /
   macos / windows
 ```
@@ -84,6 +84,25 @@ CLI (src/cli.ts)          Web 仪表盘 (web/*) + 本地服务 (src/server.ts)
 并写入 `vault-manifest.json` 记录 `original -> stored` 映射。支持：
 `mc restore <runId>` 还原、`mc vault purge [--older-than N]` 清理。
 跨设备移动自动回退为「复制 + 删除」。
+
+回收站页显示隔离内容的**真实磁盘占用**，因为「移进回收站」不等于「已释放空间」。
+`/api/state` 返回 30 秒缓存的体积（快速 `du`，在保存/还原/清理时失效），
+首屏不必等待对整个回收站目录的遍历。
+
+## 隐藏空间（macOS）
+
+`hidden-space`（`src/modules/hidden-space.ts`）扫描 `/private/var/folders` 下
+常规清理器不会进入的用户级卷：
+
+- `X/<bundle>.code_sign_clone/…`：Gatekeeper 校验产生的应用副本（单份常达 GB）；
+- `T/*.ShipIt.*`：应用更新器中断后留下的暂存目录；
+- `T/com.apple.useractivityd/…/archives`：共享粘贴板归档；
+- `C/clang`、`C/com.apple.metal`：可再生的编译/着色器缓存；
+- `~/Library/Application Support/<app>/update/update_downloading`：失效更新包。
+
+安全模型：候选一律按名称白名单 + 年龄门槛筛选，并按应用分组，只保留最新一份。
+报告项汇总 `X/C/T` 总量与回收站自身占用，同时标注 APFS 写时复制影响，
+避免把共享块算作已释放空间。
 
 ## 调度（src/core/scheduler.ts）
 
