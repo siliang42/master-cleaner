@@ -9,7 +9,7 @@
 
 <p align="center">
   <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-green.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.3-green.svg">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-555.svg">
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg">
 </p>
@@ -90,6 +90,8 @@ Requirements: **Node.js >= 18**. Runtime has no third-party npm dependencies.
 
 Prebuilt installers are published on the [Releases](https://github.com/siliang42/master-cleaner/releases) page (macOS `.dmg`/`.zip`, Windows `Setup.exe`).
 
+macOS builds are published per architecture (`arm64` and `x64`) instead of one universal binary. The Electron runtime is trimmed to the Simplified Chinese and English locales, and package compression runs at the maximum setting. This keeps each download and installed footprint substantially smaller while preserving the same cleanup engine.
+
 ## CLI
 
 ```bash
@@ -110,7 +112,7 @@ All commands accept `--lang zh-CN|en`; the language defaults to your system loca
 
 ## Desktop app
 
-`npm run desktop` launches the Electron shell, which boots the same local server and loads the dashboard in a sandboxed window. `npm run dist:mac` / `dist:win` / `dist:linux` produce installers via electron-builder.
+`npm run desktop` launches the Electron shell, which boots the same local server and loads the dashboard in a sandboxed window. `npm run dist:mac` / `dist:win` / `dist:linux` produce installers via electron-builder. `npm run pack:mac` creates an unpacked build for the current Apple Silicon Mac only.
 
 On macOS the app menu exposes **Preferences… (⌘,)** which opens the in-app settings (language, and future options). The `CmdOrCtrl+,` shortcut also works in the browser dashboard.
 

@@ -4,13 +4,13 @@
  * Install the packaged macOS build into /Applications and keep a single
  * runnable copy on the machine.
  *
- * Multiple copies (release/mac-universal, a mounted DMG, an unzipped download)
+ * Multiple copies (release/mac-<arch>, a mounted DMG, an unzipped download)
  * are separate TCC identities, so each of them asks for folder permissions
  * again. This script replaces /Applications/Master Cleaner.app with the freshly
  * built bundle, removes the build-tree copy, and verifies the ad-hoc signature.
  *
  * Usage: npm run install:mac   (packages first) or node scripts/install-mac.js
- *        --keep-build          keep release/mac-universal after installing
+ *        --keep-build          keep release/mac-<arch> after installing
  */
 
 const { spawnSync } = require('child_process');
@@ -20,7 +20,7 @@ const { adhocSign, findAppIn, inspect, BUNDLE_ID } = require('./adhoc-sign.js');
 
 const repoRoot = path.resolve(__dirname, '..');
 const releaseDir = path.join(repoRoot, 'release');
-const buildDir = path.join(releaseDir, 'mac-universal');
+const buildDir = path.join(releaseDir, `mac-${process.arch}`);
 const destination = '/Applications/Master Cleaner.app';
 const keepBuild = process.argv.includes('--keep-build');
 

@@ -112,7 +112,7 @@ module.exports.findAppIn = findAppIn;
 module.exports.BUNDLE_ID = BUNDLE_ID;
 
 if (require.main === module) {
-  const target = process.argv[2] || path.join(__dirname, '..', 'release', 'mac-universal');
+  const target = process.argv[2] || path.join(__dirname, '..', 'release', 'mac-arm64');
   const appPath = target.endsWith('.app') ? target : findAppIn(target);
   const info = adhocSign(appPath);
   console.log(`[adhoc-sign] ok: ${describe(info)}`);

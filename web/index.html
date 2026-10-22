@@ -25,6 +25,16 @@
     <span id="disk-free" class="disk-free muted small">—</span>
   </div>
   <div class="topbar-actions">
+    <button id="btn-expert" class="btn expert-entry" type="button" aria-haspopup="dialog" aria-expanded="false" data-i18n-title="expert.title">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.6-2.9 8.1-7 10-4.1-1.9-7-5.4-7-10V6z"/>
+        <path d="M9.5 12l1.7 1.7 3.5-3.7"/>
+      </svg>
+      <span class="expert-entry-copy">
+        <strong data-i18n="expert.entry">专家模式</strong>
+        <small id="expert-entry-meta" data-i18n="expert.entryIdle">模型、会话与系统项</small>
+      </span>
+    </button>
     <button id="btn-scan" class="btn btn-primary" data-i18n-title="scan.title" title="扫描可清理的内容">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <span data-i18n="scan">扫描</span>
@@ -71,10 +81,6 @@
           <button class="seg sort-btn" type="button" data-key="name"><span data-i18n="sort.name">名称</span><span class="dir"></span></button>
         </div>
         <span class="grow"></span>
-        <label class="switch" id="expert-toggle" hidden data-i18n-title="expert.title" title="包含可清理的专家项">
-          <input type="checkbox" id="opt-expert" />
-          <span data-i18n="expertItems">专家项</span>
-        </label>
       </div>
       <div id="scan-panel" class="scan-panel" hidden>
         <div class="scan-top">
@@ -154,13 +160,13 @@
       <strong id="sel-size">0 B</strong>
     </div>
     <div class="segmented" role="group" data-i18n-aria="actionbar.aria" aria-label="清理方式">
-      <button class="seg active" data-mode="quarantine" data-i18n="seg.quarantine" data-i18n-title="seg.quarantine.title" title="移入安全回收站，可还原">安全回收站</button>
-      <button class="seg" data-mode="trash" data-i18n="seg.trash" data-i18n-title="seg.trash.title" title="移入系统回收站">回收站</button>
+      <button class="seg active" data-mode="quarantine" data-i18n="seg.quarantine" data-i18n-title="seg.quarantine.title" title="移入安全回收站，可还原">安全隔离</button>
+      <button class="seg" data-mode="trash" data-i18n="seg.trash" data-i18n-title="seg.trash.title" title="移入系统回收站">系统回收站</button>
       <button class="seg" data-mode="delete" data-i18n="seg.delete" data-i18n-title="seg.delete.title" title="永久删除（不可恢复）">永久删除</button>
     </div>
-    <button id="btn-clean" class="btn btn-danger">
+    <button id="btn-clean" class="btn btn-clean-action">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>
-      <span data-i18n="clean.selected">清理所选</span>
+      <span data-i18n="clean.selected">执行清理</span>
     </button>
   </div>
 </div>
@@ -213,6 +219,60 @@
           <span data-i18n="disk.viewLarge">查看大文件</span>
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="expert-modal" class="modal" hidden>
+  <div class="modal-panel expert-panel" role="dialog" aria-modal="true" aria-labelledby="expert-drawer-title">
+    <div class="modal-head">
+      <div>
+        <h3 id="expert-drawer-title" data-i18n="expert.drawerTitle">专家模式</h3>
+        <p class="modal-subtitle" data-i18n="expert.drawerIntro">解锁需要人工判断的高价值清理项。</p>
+      </div>
+      <button id="expert-close" class="icon-btn" type="button" data-i18n-title="close" data-i18n-aria="close" title="关闭">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="expert-body">
+      <div class="expert-control">
+        <div class="expert-control-copy">
+          <strong data-i18n="expert.controlTitle">手动选择专家项</strong>
+          <span id="expert-status-copy" class="muted small"></span>
+        </div>
+        <label class="switch expert-switch" data-i18n-title="expert.title">
+          <input type="checkbox" id="opt-expert" />
+          <span data-i18n="expert.enable">启用</span>
+        </label>
+      </div>
+      <div id="expert-stats" class="expert-stats"></div>
+      <div class="expert-section-head">
+        <span data-i18n="expert.groups">按范围查看</span>
+        <span class="muted small" data-i18n="expert.groupsHint">点击进入分类</span>
+      </div>
+      <div id="expert-groups" class="expert-groups"></div>
+      <div class="expert-callout">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.9 8.1-7 10-4.1-1.9-7-5.4-7-10V6z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>
+        <span data-i18n="expert.safety">专家项不会自动勾选；默认仍使用安全隔离，可随时还原。</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="clean-confirm-modal" class="modal" hidden>
+  <div class="modal-panel confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="clean-confirm-title">
+    <div class="modal-head">
+      <h3 id="clean-confirm-title" data-i18n="clean.confirm.title">确认永久删除</h3>
+      <button id="clean-confirm-close" class="icon-btn" type="button" data-i18n-title="close" data-i18n-aria="close" title="关闭">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="confirm-body">
+      <p id="clean-confirm-copy"></p>
+    </div>
+    <div class="confirm-actions">
+      <button id="clean-confirm-cancel" class="btn btn-ghost" type="button" data-i18n="clean.confirm.cancel">返回检查</button>
+      <button id="clean-confirm-ok" class="btn btn-danger" type="button" data-i18n="clean.confirm.ok">永久删除</button>
     </div>
   </div>
 </div>

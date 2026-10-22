@@ -9,7 +9,7 @@
 
 <p align="center">
   <img alt="License: AGPL-3.0-only" src="https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.0.0-green.svg">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.1.3-green.svg">
   <img alt="Platforms" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-555.svg">
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg">
 </p>
@@ -90,6 +90,8 @@ node dist/cli.js --help
 
 预编译安装包发布在 [Releases](https://github.com/siliang42/master-cleaner/releases) 页面（macOS `.dmg`/`.zip`、Windows `Setup.exe`）。
 
+macOS 安装包按 `arm64` 与 `x64` 分架构发布，不再把两套 Electron 框架塞进一个 universal 包；桌面运行时只保留简体中文和英文资源，并启用最高压缩级别。每个下载包与安装后的磁盘占用都会明显减小，清理引擎和功能保持一致。
+
 ## 命令行
 
 ```bash
@@ -110,7 +112,7 @@ mc legal                       # 查看许可、署名与免责声明
 
 ## 桌面客户端
 
-`npm run desktop` 启动 Electron 外壳：主进程拉起同一个本地服务，并在沙箱窗口中加载仪表盘。`npm run dist:mac` / `dist:win` / `dist:linux` 通过 electron-builder 生成安装包。
+`npm run desktop` 启动 Electron 外壳：主进程拉起同一个本地服务，并在沙箱窗口中加载仪表盘。`npm run dist:mac` / `dist:win` / `dist:linux` 通过 electron-builder 生成安装包。`npm run pack:mac` 只生成当前 Apple Silicon Mac 使用的未压缩应用目录。
 
 macOS 上应用菜单提供 **偏好设置…（⌘,）**，打开应用内设置（语言，以及后续选项）。浏览器版同样支持 `Cmd/Ctrl + ,` 打开设置。
 

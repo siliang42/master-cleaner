@@ -27,6 +27,7 @@ const state = {
   about: null,
   modules: [],
   itemEls: null,
+  confirmResolve: null,
 };
 
 function fmt(bytes) {
@@ -299,6 +300,7 @@ function render() {
   updateActionbar();
   updateSortUI();
   updateDiskBar();
+  renderExpertUI();
 }
 
 function updateSortUI() {
@@ -311,14 +313,120 @@ function updateSortUI() {
     if (d) d.textContent = on ? (state.sort.dir === 'asc' ? '\u2191' : '\u2193') : '';
     btn.setAttribute('title', T(btn.dataset.key === 'name' ? 'sort.byName' : 'sort.bySize') + ' \u00b7 ' + T(state.sort.dir === 'asc' ? 'sort.asc' : 'sort.desc'));
   });
-  const exp = $('#expert-toggle');
-  if (exp) {
-    const items = selectedItems();
-    const canExpert = items.some((i) => i.risk === 'expert' && i.strategy !== 'info' && !i.duplicate);
-    exp.hidden = !(canExpert || state.expert);
-    const cb = $('#opt-expert');
-    if (cb) cb.checked = state.expert;
+}
+
+/* ---------------- expert mode drawer ---------------- */
+function expertRows() {
+  if (!state.report) return [];
+  return state.report.modules.flatMap((mod) =>
+    mod.items
+      .filter((item) => item.risk === 'expert' && !item.duplicate)
+      .map((item) => ({ item, module: mod }))
+  );
+}
+
+function expertMetrics() {
+  const rows = expertRows();
+  const actionable = rows.filter(({ item }) => item.strategy !== 'info');
+  const infoOnly = rows.filter(({ item }) => item.strategy === 'info');
+  const bytes = actionable.reduce((sum, { item }) => sum + (item.bytes || 0), 0);
+  const groups = new Map();
+  for (const row of rows) {
+    const category = row.module.category || 'system';
+    if (!groups.has(category)) groups.set(category, { category, count: 0, bytes: 0 });
+    const group = groups.get(category);
+    group.count += 1;
+    if (row.item.strategy !== 'info') group.bytes += row.item.bytes || 0;
   }
+  return {
+    rows,
+    actionable,
+    infoOnly,
+    bytes,
+    groups: Array.from(groups.values()).sort((a, b) => b.bytes - a.bytes || b.count - a.count),
+  };
+}
+
+function renderExpertEntry() {
+  const btn = $('#btn-expert');
+  const meta = $('#expert-entry-meta');
+  if (!btn || !meta) return;
+  const metrics = expertMetrics();
+  btn.classList.toggle('is-active', state.expert);
+  btn.setAttribute('aria-expanded', String(!$('#expert-modal')?.hidden));
+  if (!state.report) {
+    meta.textContent = T('expert.entryIdle');
+    return;
+  }
+  if (!metrics.rows.length) {
+    meta.textContent = T('expert.entryNone');
+  } else if (state.expert) {
+    meta.textContent = T('expert.entryOn', { n: metrics.actionable.length, bytes: fmt(metrics.bytes) });
+  } else {
+    meta.textContent = T('expert.entryReady', { n: metrics.actionable.length, bytes: fmt(metrics.bytes) });
+  }
+}
+
+function renderExpertDrawer() {
+  const metrics = expertMetrics();
+  const copy = $('#expert-status-copy');
+  const stats = $('#expert-stats');
+  const groups = $('#expert-groups');
+  const cb = $('#opt-expert');
+  if (cb) cb.checked = state.expert;
+  if (copy) copy.textContent = T(state.expert ? 'expert.statusOn' : 'expert.statusOff');
+  if (stats) {
+    stats.innerHTML = `
+      <div class="expert-stat accent"><div class="k">${esc(T('expert.statActionable'))}</div><div class="v">${metrics.actionable.length}</div></div>
+      <div class="expert-stat"><div class="k">${esc(T('expert.statInfo'))}</div><div class="v">${metrics.infoOnly.length}</div></div>
+      <div class="expert-stat"><div class="k">${esc(T('expert.statVolume'))}</div><div class="v">${esc(fmt(metrics.bytes))}</div></div>`;
+  }
+  if (!groups) return;
+  if (!state.report) {
+    groups.innerHTML = `<div class="expert-empty">${esc(T('expert.scanFirst'))}</div>`;
+  } else if (!metrics.groups.length) {
+    groups.innerHTML = `<div class="expert-empty">${esc(T('expert.empty'))}</div>`;
+  } else {
+    groups.innerHTML = metrics.groups.map((group) => `
+      <button class="expert-group" type="button" data-expert-category="${esc(group.category)}" title="${esc(T('expert.openGroup', { name: CAT(group.category) }))}">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M7 4v6"/><path d="M17 4v6"/><path d="M5 13h14v7H5z"/></svg>
+        <span class="expert-group-copy">
+          <span class="expert-group-name">${esc(CAT(group.category))}</span>
+          <span class="expert-group-meta">${esc(T('expert.groupCount', { n: group.count }))}</span>
+        </span>
+        <span class="expert-group-size">${group.bytes ? esc(fmt(group.bytes)) : '—'}</span>
+        <span class="expert-group-arrow" aria-hidden="true">›</span>
+      </button>`).join('');
+  }
+}
+
+function renderExpertUI() {
+  renderExpertEntry();
+  const modal = $('#expert-modal');
+  if (modal && !modal.hidden) renderExpertDrawer();
+}
+
+function setExpert(enabled) {
+  state.expert = !!enabled;
+  const cb = $('#opt-expert');
+  if (cb) cb.checked = state.expert;
+  if (state.report) render();
+  else renderExpertUI();
+}
+
+function openExpertDrawer() {
+  const modal = $('#expert-modal');
+  if (!modal) return;
+  renderExpertDrawer();
+  modal.hidden = false;
+  renderExpertEntry();
+  $('#expert-close')?.focus();
+}
+
+function closeExpertDrawer() {
+  const modal = $('#expert-modal');
+  if (modal) modal.hidden = true;
+  renderExpertEntry();
 }
 
 function initSort() {
@@ -422,8 +530,19 @@ function updateActionbar() {
   const selTile = $('#stat-selected');
   if (selTile) selTile.textContent = fmt(selBytes);
   $('#actionbar').hidden = !state.report || state.selected.size === 0;
+  syncCleanAction();
   renderSelection();
 }
+
+function syncCleanAction() {
+  const btn = $('#btn-clean');
+  if (!btn) return;
+  const destructive = state.mode === 'delete';
+  btn.classList.toggle('is-destructive', destructive);
+  btn.setAttribute('aria-label', destructive ? T('clean.selectedDelete') : T('clean.selected'));
+  $$('.seg[data-mode]').forEach((seg) => seg.setAttribute('aria-pressed', String(seg.dataset.mode === state.mode)));
+}
+
 /* ---------------- selection review: what will actually be cleaned ---------------- */
 function selItems() {
   return selectedItems().filter((i) => state.selected.has(i.id));
@@ -476,7 +595,10 @@ function renderSelection() {
     }
   }
   html += '</div>';
-  if (risky) html += `<div class="sel-warn">${esc(T('sel.warn', { n: risky }))}</div>`;
+  if (risky) {
+    const key = state.mode === 'delete' ? 'sel.warnDelete' : 'sel.warn';
+    html += `<div class="sel-warn">${esc(T(key, { n: risky }))}</div>`;
+  }
   box.innerHTML = html;
 }
 
@@ -505,10 +627,7 @@ function clearSelection() {
 /* Expert items are never pre-selected; this unlocks them for deliberate manual
  * selection without a re-scan (the report already contains them). */
 function enableExpert() {
-  state.expert = true;
-  const cb = $('#opt-expert');
-  if (cb) cb.checked = true;
-  render();
+  setExpert(true);
 }
 
 function locateItem(id) {
@@ -530,9 +649,34 @@ function locateItem(id) {
 
 
 /* ---------------- clean ---------------- */
+function finishCleanConfirm(confirmed) {
+  const modal = $('#clean-confirm-modal');
+  if (modal) modal.hidden = true;
+  const resolve = state.confirmResolve;
+  state.confirmResolve = null;
+  if (resolve) resolve(!!confirmed);
+}
+
+function requestPermanentConfirmation(count, bytes, risky) {
+  const modal = $('#clean-confirm-modal');
+  const copy = $('#clean-confirm-copy');
+  if (!modal || !copy) return Promise.resolve(true);
+  if (state.confirmResolve) state.confirmResolve(false);
+  copy.textContent = T('clean.confirm.body', { n: count, bytes: fmt(bytes), risky });
+  modal.hidden = false;
+  $('#clean-confirm-cancel')?.focus();
+  return new Promise((resolve) => { state.confirmResolve = resolve; });
+}
+
 async function doClean() {
   const ids = Array.from(state.selected);
   if (!ids.length) return;
+  if (state.mode === 'delete') {
+    const items = selItems();
+    const bytes = items.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    const risky = items.filter((item) => item.risk !== 'safe').length;
+    if (!(await requestPermanentConfirmation(ids.length, bytes, risky))) return;
+  }
   const btn = $('#btn-clean');
   btn.disabled = true;
   btn.classList.add('is-loading');
@@ -732,6 +876,25 @@ function setView(v) {
 function init() {
   $('#btn-scan').onclick = runScan;
   $('#btn-clean').onclick = doClean;
+  const expertBtn = $('#btn-expert');
+  if (expertBtn) expertBtn.onclick = openExpertDrawer;
+  const expertClose = $('#expert-close');
+  if (expertClose) expertClose.onclick = closeExpertDrawer;
+  const expertModal = $('#expert-modal');
+  if (expertModal) expertModal.addEventListener('click', (e) => { if (e.target.id === 'expert-modal') closeExpertDrawer(); });
+  const expertGroups = $('#expert-groups');
+  if (expertGroups) {
+    expertGroups.onclick = (e) => {
+      const row = e.target.closest('[data-expert-category]');
+      if (!row) return;
+      state.filter = row.dataset.expertCategory;
+      if (state.modules && state.modules.length) renderCategories(state.modules);
+      render();
+      closeExpertDrawer();
+      const main = $('#main');
+      if (main) main.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+  }
   const langBtn = $('#btn-lang');
   if (langBtn) {
     const target = (window.I18N && window.I18N.locale) === 'en' ? 'zh-CN' : 'en';
@@ -753,9 +916,24 @@ function init() {
     };
   }
 
-  $('#opt-expert').onchange = (e) => { state.expert = e.target.checked; if (state.report) render(); };
+  const expertToggle = $('#opt-expert');
+  if (expertToggle) expertToggle.onchange = (e) => setExpert(e.target.checked);
   $$('.tab').forEach((t) => (t.onclick = () => setView(t.dataset.view)));
-  $$('.seg[data-mode]').forEach((s) => (s.onclick = () => { state.mode = s.dataset.mode; $$('.seg[data-mode]').forEach((x) => x.classList.toggle('active', x === s)); }));
+  $$('.seg[data-mode]').forEach((s) => (s.onclick = () => {
+    state.mode = s.dataset.mode;
+    $$('.seg[data-mode]').forEach((x) => x.classList.toggle('active', x === s));
+    updateActionbar();
+  }));
+  const cleanConfirmOk = $('#clean-confirm-ok');
+  if (cleanConfirmOk) cleanConfirmOk.onclick = () => finishCleanConfirm(true);
+  const cleanConfirmCancel = $('#clean-confirm-cancel');
+  if (cleanConfirmCancel) cleanConfirmCancel.onclick = () => finishCleanConfirm(false);
+  const cleanConfirmClose = $('#clean-confirm-close');
+  if (cleanConfirmClose) cleanConfirmClose.onclick = () => finishCleanConfirm(false);
+  const cleanConfirmModal = $('#clean-confirm-modal');
+  if (cleanConfirmModal) cleanConfirmModal.addEventListener('click', (e) => {
+    if (e.target.id === 'clean-confirm-modal') finishCleanConfirm(false);
+  });
   initSort();
   $('#sched-preset').onchange = (e) => { $('#sched-cron-field').hidden = e.target.value !== 'custom'; };
   $('#sched-form').onsubmit = async (e) => {
@@ -807,6 +985,11 @@ function init() {
   if (kbd) kbd.textContent = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '\u2318,' : 'Ctrl+,';
   document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); } });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !$('#expert-modal')?.hidden) closeExpertDrawer();
+    if (e.key === 'Escape' && !$('#clean-confirm-modal')?.hidden) finishCleanConfirm(false);
+  });
+  renderExpertUI();
   refreshState()
     .then(() => {
       if (state.scanningOnServer) runScan();
