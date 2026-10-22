@@ -13,7 +13,7 @@
 export const LEGAL = {
   productName: 'Master Cleaner',
   packageName: 'master-cleaner',
-  version: '1.1.0',
+  version: '1.1.1',
   copyrightYear: 2026,
   copyrightHolder: 'Johnny',
   contactEmail: 'obanie@qq.com',

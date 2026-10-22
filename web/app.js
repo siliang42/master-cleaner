@@ -14,6 +14,8 @@ const state = {
   sort: { key: 'size', dir: 'desc' },
   scanModules: null,
   scanning: false,
+  scanningOnServer: false,
+  scanReconnecting: false,
   mode: 'quarantine',
   expert: false,
   filter: null,
@@ -66,6 +68,7 @@ async function api(path, opts) {
 /* ---------------- state ---------------- */
 async function refreshState() {
   const s = await api('/api/state');
+  state.scanningOnServer = !!s.scanning;
   state.schedules = s.schedules;
   state.vault = s.vault.runs;
   state.vaultBytesHuman = s.vault.bytesHuman;
@@ -213,9 +216,16 @@ function runScan() {
     steps.scrollTop = steps.scrollHeight;
   };
   es.addEventListener('log', (e) => { addStep(JSON.parse(e.data).message); });
+  es.addEventListener('open', () => {
+    if (state.scanReconnecting) {
+      state.scanReconnecting = false;
+      toast(T('toast.scanStart'), T('toast.scanReconnected'));
+    }
+  });
   es.addEventListener('done', (e) => {
     es.close();
     stop();
+    state.scanReconnecting = false;
     state.report = JSON.parse(e.data);
     state.filter = null;
     state.selected = new Set();
@@ -224,10 +234,37 @@ function runScan() {
     render();
   });
   es.addEventListener('error', (e) => {
-    es.close();
-    stop();
-    toast(T('toast.scanError'), e.data ? L(JSON.parse(e.data).message) : T('toast.connectionLost'), true);
+    if (e && typeof e.data === 'string' && e.data) {
+      // The server reported a real failure.
+      es.close();
+      stop();
+      state.scanReconnecting = false;
+      let message = T('toast.connectionLost');
+      try { message = L(JSON.parse(e.data).message); } catch (err) { /* keep fallback */ }
+      toast(T('toast.scanError'), message, true);
+      return;
+    }
+    // Transport-level drop: keep the stream open so EventSource reconnects and
+    // the server re-attaches us to the scan that is still running.
+    if (!state.scanReconnecting) {
+      state.scanReconnecting = true;
+      toast(T('toast.scanError'), T('toast.scanReconnecting'), true);
+    }
   });
+}
+
+/** Re-render the last completed scan after a reload (language switch, etc.). */
+async function restoreReport() {
+  if (state.report) return;
+  try {
+    const r = await api('/api/report');
+    if (!r || !r.report) return;
+    state.report = r.report;
+    state.filter = null;
+    state.selected = new Set();
+    for (const m of state.report.modules) for (const it of m.items) if (it.defaultSelected && it.strategy !== 'info') state.selected.add(it.id);
+    render();
+  } catch (e) { /* first run, no report yet */ }
 }
 
 function selectedItems() {
@@ -772,7 +809,12 @@ function init() {
   if (kbd) kbd.textContent = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '\u2318,' : 'Ctrl+,';
   document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); openSettings(); } });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSettings(); });
-  refreshState().catch((e) => toast(T('toast.backend'), String(e), true));
+  refreshState()
+    .then(() => {
+      if (state.scanningOnServer) runScan();
+      else void restoreReport();
+    })
+    .catch((e) => toast(T('toast.backend'), String(e), true));
   const qs = new URLSearchParams(location.search);
   const sk = qs.get('sort');
   if (sk === 'size' || sk === 'name') state.sort.key = sk;
@@ -783,5 +825,8 @@ function init() {
   updateSortUI();
   if (qs.get('auto') === '1') setTimeout(runScan, 300);
 }
+
+// Entry points used by the Electron tray shortcuts (see electron/main.js).
+window.MC_API = { runScan: () => runScan(), showView: (v) => setView(v) };
 
 if (window.I18N && window.I18N.ready) window.I18N.ready.then(init); else init();

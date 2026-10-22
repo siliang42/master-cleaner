@@ -105,6 +105,8 @@
     "toast.backend": "无法连接后端",
     "toast.connectionLost": "连接中断",
     "toast.scanStart": "开始扫描…",
+    "toast.scanReconnecting": "连接中断，正在重连扫描进度…",
+    "toast.scanReconnected": "已重新连接，扫描继续",
     "clean.done.body": "释放 {bytes}，处理 {n} 项。{vaultNote}",
     "clean.vaultNote": "可在回收站还原。",
     "clean.skipped.body": "{n} 项受保护未清理",

@@ -18,6 +18,33 @@ const WEB_DIR = path.join(__dirname, '..', 'web');
 let lastReport: ScanReport | null = null;
 let scanning = false;
 
+interface ScanSubscriber {
+  send: (event: string, data: unknown) => void;
+  end: () => void;
+}
+
+/** Live SSE listeners plus a short log tail so reloads can re-attach. */
+const scanSubscribers = new Set<ScanSubscriber>();
+const SCAN_LOG_TAIL = 20;
+const scanLogTail: string[] = [];
+
+function broadcastScan(event: string, data: unknown): void {
+  if (event === 'log') {
+    const message = (data as { message?: string } | null)?.message;
+    if (message) {
+      scanLogTail.push(message);
+      while (scanLogTail.length > SCAN_LOG_TAIL) scanLogTail.shift();
+    }
+  }
+  for (const sub of scanSubscribers) sub.send(event, data);
+}
+
+function closeScanSubscribers(): void {
+  for (const sub of [...scanSubscribers]) sub.end();
+  scanSubscribers.clear();
+  scanLogTail.length = 0;
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -86,6 +113,7 @@ async function statePayload() {
     vault: { bytes: vaultBytes, bytesHuman: formatBytes(vaultBytes), runs: vaultRuns },
     schedules,
     config: cfg,
+    scanning,
     modules: allModules().map((m) => ({
       id: m.id,
       title: localize(m.title),
@@ -128,27 +156,66 @@ async function handleApi(req: http.IncomingMessage, res: http.ServerResponse, ur
     json(res, 200, await statePayload());
     return true;
   }
+  if (p === '/api/report' && req.method === 'GET') {
+    json(res, 200, { report: lastReport ? localizeReport(lastReport) : null });
+    return true;
+  }
   if (p === '/api/modules' && req.method === 'GET') {
     json(res, 200, await statePayload());
     return true;
   }
   if (p === '/api/scan/stream' && req.method === 'GET') {
-    if (scanning) { json(res, 429, { error: localize('已有扫描在进行中') }); return true; }
-    scanning = true;
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' });
-    const send = (event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    let closed = false;
+    // SSE comment frames keep long module scans alive and stop Node's default
+    // request timeout from dropping the connection mid-scan.
+    const heartbeat = setInterval(() => {
+      if (closed) return;
+      try { res.write(': ping\n\n'); } catch { /* client gone */ }
+    }, 15_000);
+    const sub: ScanSubscriber = {
+      send(event, data) {
+        if (closed) return;
+        try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch { /* client gone */ }
+      },
+      end() {
+        if (closed) return;
+        closed = true;
+        clearInterval(heartbeat);
+        scanSubscribers.delete(sub);
+        try { res.end(); } catch { /* ignore */ }
+      },
+    };
+    req.on('close', () => {
+      if (!closed) { closed = true; clearInterval(heartbeat); }
+      scanSubscribers.delete(sub);
+    });
+    scanSubscribers.add(sub);
+
+    // A reloaded page or a second window re-attaches to the running scan
+    // instead of being rejected or silently losing the stream.
+    if (scanning) {
+      for (const message of scanLogTail.slice(-8)) sub.send('log', { message });
+      sub.send('log', { message: localize('已同步到正在进行的扫描') });
+      return true;
+    }
+
+    scanning = true;
+    scanLogTail.length = 0;
     const modules = url.searchParams.get('modules')?.split(',').filter(Boolean);
     const includeExpert = url.searchParams.get('expert') === '1';
-    try {
-      const report = await runScan({ moduleIds: modules, opts: { includeExpert, includeInfo: true }, log: (m) => send('log', { message: localize(m) }) });
-      lastReport = report;
-      send('done', localizeReport(report));
-    } catch (e) {
-      send('error', { message: localize(String(e)) });
-    } finally {
-      scanning = false;
-      res.end();
-    }
+    void (async () => {
+      try {
+        const report = await runScan({ moduleIds: modules, opts: { includeExpert, includeInfo: true }, log: (m) => broadcastScan('log', { message: localize(m) }) });
+        lastReport = report;
+        broadcastScan('done', localizeReport(report));
+      } catch (e) {
+        broadcastScan('error', { message: localize(String(e)) });
+      } finally {
+        scanning = false;
+        closeScanSubscribers();
+      }
+    })();
     return true;
   }
   if (p === '/api/scan' && req.method === 'GET') {
@@ -280,6 +347,9 @@ export function startServer(port: number, log = true): Promise<http.Server> {
       }
       void serveStatic(res, url.pathname);
     });
+    // Progress streams run for as long as a scan takes; Node's default 300s
+    // request timeout would otherwise cut a quiet stream mid-scan.
+    server.requestTimeout = 0;
     server.listen(port, '127.0.0.1', () => {
       if (log) {
         console.log(`\n  Master Cleaner ${localize('仪表盘已启动')}: http://127.0.0.1:${port}`);

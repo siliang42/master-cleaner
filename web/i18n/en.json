@@ -105,6 +105,8 @@
     "toast.backend": "Cannot reach the backend",
     "toast.connectionLost": "Connection lost",
     "toast.scanStart": "Scanning…",
+    "toast.scanReconnecting": "Connection dropped; reconnecting to the scan…",
+    "toast.scanReconnected": "Reconnected — scan continues",
     "clean.done.body": "Freed {bytes}, {n} items. {vaultNote}",
     "clean.vaultNote": "You can restore from the vault.",
     "clean.skipped.body": "{n} protected items were not cleaned",
@@ -549,6 +551,7 @@
     "已保护 ": "Protected ",
     " 个疑似凭据 / 会话 / 密钥文件，它们不会被列出或清理。": " files that look like credentials / sessions / keys; they are neither listed nor cleaned.",
     "Agent 工具目录只清理白名单内的临时子目录；settings、commands、memory、skills、rules 与 worktrees 保持不变。": "Inside agent tool dirs only allow-listed scratch sub-directories are cleaned; settings, commands, memory, skills, rules and worktrees are left untouched.",
-    "项目内的 agent 残留由「项目工作残留」模块处理：只清理可再生的缓存子目录，配置、命令、记忆与 skills 保持不变。": "Agent residue inside projects is handled by the Project work residue module: only regenerable cache sub-directories are cleaned; settings, commands, memory and skills stay untouched."
+    "项目内的 agent 残留由「项目工作残留」模块处理：只清理可再生的缓存子目录，配置、命令、记忆与 skills 保持不变。": "Agent residue inside projects is handled by the Project work residue module: only regenerable cache sub-directories are cleaned; settings, commands, memory and skills stay untouched.",
+    "已同步到正在进行的扫描": "Attached to the running scan"
   }
 }

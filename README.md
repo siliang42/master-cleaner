@@ -114,6 +114,8 @@ All commands accept `--lang zh-CN|en`; the language defaults to your system loca
 
 On macOS the app menu exposes **Preferences… (⌘,)** which opens the in-app settings (language, and future options). The `CmdOrCtrl+,` shortcut also works in the browser dashboard.
 
+On macOS the menu-bar icon opens the dashboard on click; right-click (or Control-click) shows the quick-action menu — Scan now, Quick clean, a live disk-space readout, language switch and Quit.
+
 Use `npm run install:mac` on a Mac to package, ad-hoc sign, install into `/Applications`, and remove the build-tree copy (see below).
 
 ## macOS signing & folder permissions

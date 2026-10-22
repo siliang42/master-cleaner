@@ -19,7 +19,8 @@ let tray = null;
 let server = null;
 let serverUrl = null;
 let langPref = null; // 'zh-CN' | 'en'
-let clickTimer = null;
+let trayDisk = null; // last /api/state disk snapshot shown in the tray menu
+let scanActive = false;
 let busy = false;
 
 app.isQuitting = false;
@@ -83,12 +84,12 @@ function createWindow() {
 
 function showWindow() {
   if (!mainWindow) {
-    void createWindow();
-    return;
+    return createWindow();
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  return mainWindow;
 }
 
 async function readLocale() {
@@ -101,22 +102,70 @@ async function readLocale() {
   }
 }
 
-function trayLabel() {
-  return (langPref === 'zh-CN' ? 'Master Cleaner · 中文' : 'Master Cleaner · English');
-}
-
 function updateTray() {
   if (!tray) return;
-  tray.setToolTip(trayLabel() + (busy ? ' · 正在清理…' : ''));
+  const zh = langPref === 'zh-CN';
+  const suffix = busy ? (zh ? '正在快速清理…' : 'quick cleaning…') : scanActive ? (zh ? '正在扫描…' : 'scanning…') : '';
+  tray.setToolTip('Master Cleaner' + (suffix ? ' · ' + suffix : ''));
 }
 
-/* Single click on the menu-bar logo flips the UI language; a double click runs a quick clean. */
+/** Pull disk/scan status so the tray menu shows live information. */
+async function refreshTrayStatus() {
+  if (!serverUrl) return;
+  try {
+    const r = await fetch(serverUrl + '/api/state', { cache: 'no-store' });
+    const s = await r.json();
+    if (s && s.disk) trayDisk = s.disk;
+    scanActive = !!(s && s.scanning);
+    updateTray();
+  } catch { /* keep the previous snapshot */ }
+}
+
+function trayMenuTemplate() {
+  const zh = langPref === 'zh-CN';
+  const t = (cn, en) => (zh ? cn : en);
+  return [
+    { label: t('打开主窗口', 'Open Master Cleaner'), click: showWindow },
+    { type: 'separator' },
+    { label: scanActive ? t('扫描进行中…', 'Scanning…') : t('立即扫描', 'Scan now'), enabled: !scanActive, click: () => startScanFromTray() },
+    { label: busy ? t('正在快速清理…', 'Quick clean running…') : t('快速清理（安全项）', 'Quick clean (safe items)'), enabled: !busy, click: () => void quickClean() },
+    { type: 'separator' },
+    {
+      label: trayDisk
+        ? t(`磁盘剩余 ${trayDisk.freeHuman} / 共 ${trayDisk.totalHuman}`, `Disk: ${trayDisk.freeHuman} free of ${trayDisk.totalHuman}`)
+        : t('读取磁盘状态…', 'Reading disk status…'),
+      enabled: false,
+    },
+    { type: 'separator' },
+    { label: t('切换为 English', '切换到简体中文'), click: () => toggleLanguage() },
+    { type: 'separator' },
+    { label: t('退出', 'Quit'), click: () => { app.isQuitting = true; app.quit(); } },
+  ];
+}
+
+/** Open the dashboard and start a scan through the page API. */
+function startScanFromTray() {
+  const win = showWindow();
+  if (!win) return;
+  const kick = () => {
+    win.webContents
+      .executeJavaScript('window.MC_API && window.MC_API.runScan && window.MC_API.runScan();', true)
+      .catch(() => {});
+    scanActive = true;
+    updateTray();
+    setTimeout(() => void refreshTrayStatus(), 2000);
+  };
+  if (win.webContents.isLoading()) win.webContents.once('did-finish-load', kick);
+  else kick();
+}
+
 function toggleLanguage() {
   const next = langPref === 'zh-CN' ? 'en' : 'zh-CN';
   langPref = next;
   updateTray();
   if (!mainWindow) {
-    void createWindow().then(() => applyLanguage(next));
+    const win = createWindow();
+    if (win) win.webContents.once('did-finish-load', () => applyLanguage(next));
     return;
   }
   applyLanguage(next);
@@ -159,34 +208,30 @@ function buildTray() {
   if (tray) return;
   let icon = nativeImage.createEmpty();
   try {
-    const src = nativeImage.createFromPath(path.join(__dirname, '..', 'web', 'logo-square.png'));
-    if (!src.isEmpty()) icon = src.resize({ width: process.platform === 'darwin' ? 18 : 16, height: process.platform === 'darwin' ? 18 : 16 });
+    if (process.platform === 'darwin') {
+      const template = nativeImage.createFromPath(path.join(__dirname, 'assets', 'trayTemplate.png'));
+      if (!template.isEmpty()) {
+        template.setTemplateImage(true); // adapts to light and dark menu bars
+        icon = template;
+      }
+    }
+    if (icon.isEmpty()) {
+      const src = nativeImage.createFromPath(path.join(__dirname, '..', 'web', 'logo-square.png'));
+      if (!src.isEmpty()) icon = src.resize({ width: process.platform === 'darwin' ? 18 : 16, height: process.platform === 'darwin' ? 18 : 16 });
+    }
   } catch { /* keep empty icon */ }
 
   tray = new Tray(icon);
   updateTray();
 
-  tray.on('click', () => {
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
-    clickTimer = setTimeout(() => {
-      clickTimer = null;
-      toggleLanguage();
-    }, 260);
+  // Primary click opens the dashboard; right-click / control-click opens the
+  // quick-action menu (scan, quick clean, disk status, language, quit).
+  tray.on('click', () => showWindow());
+  tray.on('right-click', () => {
+    void refreshTrayStatus().finally(() => {
+      if (tray) tray.popUpContextMenu(Menu.buildFromTemplate(trayMenuTemplate()));
+    });
   });
-  tray.on('double-click', () => {
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
-    void quickClean();
-  });
-
-  const zh = () => langPref === 'zh-CN';
-  const menu = Menu.buildFromTemplate([
-    { label: zh() ? '打开主窗口' : 'Open window', click: showWindow },
-    { label: zh() ? '快速清理' : 'Quick clean', click: () => void quickClean() },
-    { label: zh() ? '切换语言' : 'Switch language', click: () => toggleLanguage() },
-    { type: 'separator' },
-    { label: zh() ? '退出' : 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
-  ]);
-  tray.on('right-click', () => tray.popUpContextMenu(menu));
 }
 
 function buildMenu() {
