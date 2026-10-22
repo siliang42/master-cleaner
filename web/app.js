@@ -76,16 +76,14 @@ async function refreshState() {
   updateDiskBar();
   const subEl = $('#subtitle');
   if (subEl) subEl.textContent = `${s.os} · ${s.arch}`;
-  $('#os-info').textContent = T('osInfo', { os: s.os, priv: s.elevated ? T('privilege.admin') : T('privilege.user'), version: s.version });
+  $('#os-info').textContent = s.os;
   state.modules = s.modules;
   renderCategories(s.modules);
   renderSchedules();
   renderVault(s.vault);
   if (s.legal) {
     state.about = { version: s.version, os: s.os, arch: s.arch, dataDir: s.dataDir, desktop: s.desktop, runtime: s.runtime, legal: s.legal };
-    const ver = $('#legal-version'); if (ver) ver.textContent = 'v' + (s.version || '');
-    const lic = $('#legal-license'); if (lic) lic.textContent = s.legal.licenseId || 'AGPL-3.0';
-    const at = $('#legal-attrib'); if (at) at.textContent = s.legal.attributionNotice || '';
+    const meta = $('#legal-meta'); if (meta) meta.textContent = `v${s.version || '—'} · ${s.legal.licenseId || 'AGPL-3.0'}`;
   }
 }
 

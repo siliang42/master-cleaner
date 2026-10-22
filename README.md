@@ -133,6 +133,23 @@ Practical rules on macOS:
 3. Grant each folder prompt once per build (Documents, Desktop, Downloads, Movies, Pictures). Review or revoke them anytime under System Settings → Privacy & Security → Files and Folders.
 4. Set `MC_SKIP_ADHOC_SIGN=1` once real Developer ID signing + notarization replaces this stop-gap.
 
+### Opening a downloaded build (Gatekeeper)
+
+A `.dmg` downloaded from GitHub gets the `com.apple.quarantine` extended attribute. Because this project ships ad-hoc signed builds, Gatekeeper blocks the first launch ("Apple cannot check it for malicious software"). Use either:
+
+- Right-click `/Applications/Master Cleaner.app` → **Open**, then confirm **Open**, or choose **System Settings → Privacy & Security → Open Anyway**.
+- Or clear the download flag explicitly:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Master Cleaner.app"
+```
+
+**Why this works:** macOS attaches `com.apple.quarantine` to files that arrived from the network, and Gatekeeper only runs its notarization check when that marker is present. Removing it tells macOS the app is trusted locally, so the launch proceeds. The signature is untouched — the app is still not notarized and this does not make the build suitable for redistribution.
+
+**Scope it to this one app.** Running `xattr -dr com.apple.quarantine /Applications/` would strip the flag from every app on the machine and disable a system-wide Gatekeeper safeguard. Clearing quarantine is also a trust decision: only do it for a build fetched from this project's official Releases.
+
+Local builds installed with `npm run install:mac` are copied out of `release/`, not downloaded, so they carry no quarantine flag and need none of this. Downloading or copying the app from a `.dmg`/`.zip` again re-applies it.
+
 ## Localization
 
 The UI, CLI output and scanned items are fully bilingual (Simplified Chinese / English) and **follow the system language by default**. Resolution order:

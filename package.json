@@ -1,6 +1,6 @@
 {
   "name": "master-cleaner",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Master Cleaner - cross-platform (macOS/Windows/Linux) disk cleaner and optimizer with first-class AI-era residue cleanup.",
   "author": "Johnny <obanie@qq.com>",
   "homepage": "https://github.com/siliang42/master-cleaner",
@@ -39,7 +39,7 @@
     "desktop": "npm run build && electron .",
     "pack": "npm run build && electron-builder --dir --publish never",
     "dist": "npm run build && electron-builder --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:mac": "npm run build && bash scripts/make-icns.sh && electron-builder --mac --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
     "dist:linux": "npm run build && electron-builder --linux --publish never",
     "sign:mac": "node scripts/adhoc-sign.js",
@@ -77,7 +77,7 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "icon": "build/icon.png",
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",

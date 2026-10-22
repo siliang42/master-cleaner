@@ -51,8 +51,8 @@
     <div class="cat-head"><span data-i18n="cat.heading">分类</span><button id="btn-clear-filter" class="linkish" data-i18n="cat.all">全部</button></div>
     <ul id="cat-list" class="cat-list"></ul>
     <div class="rail-foot">
-      <div id="os-info" class="muted small">—</div>
-      <button id="btn-lang" class="lang-toggle" type="button" hidden>
+      <span id="os-info" class="rail-os">—</span>
+      <button id="btn-lang" class="rail-lang" type="button" hidden>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>
         <span id="btn-lang-label">EN</span>
       </button>
@@ -166,13 +166,9 @@
 </div>
 
 <footer class="legalbar" data-i18n-aria="legal.aria" aria-label="关于与许可">
-  <div class="legalbar-id">
-    <span class="legal-name">Master Cleaner</span>
-    <span id="legal-version" class="legal-chip">v—</span>
-    <span id="legal-license" class="legal-chip">AGPL-3.0</span>
-  </div>
+  <span class="legal-name">Master Cleaner</span>
+  <span id="legal-meta" class="legal-meta">v— · AGPL-3.0</span>
   <span class="grow"></span>
-  <span id="legal-attrib" class="legal-attrib muted small"></span>
   <button id="btn-about" class="icon-btn" type="button" data-i18n-title="about.aboutTitle" data-i18n-aria="about.aboutTitle" title="关于 · 许可 · 免责">
     <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>
   </button>

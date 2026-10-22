@@ -133,6 +133,23 @@ macOS 使用建议：
 3. 每个构建把各目录弹窗授权一次（Documents、Desktop、Downloads、Movies、Pictures）；可随时在 系统设置 → 隐私与安全性 → 文件与文件夹 中查看或撤销。
 4. 未来接入 Developer ID 签名与公证后，设置 `MC_SKIP_ADHOC_SIGN=1` 跳过这一步。
 
+### 打不开从 Releases 下载的包？（Gatekeeper）
+
+从 GitHub 下载的 `.dmg` 会被 macOS 打上 `com.apple.quarantine` 扩展属性。由于本项目目前只提供 ad-hoc 签名，Gatekeeper 会阻止首次启动（提示「无法验证开发者」或「Apple 无法检查其是否包含恶意软件」）。二选一：
+
+- 在 `/Applications/Master Cleaner.app` 上**右键 → 打开**，再确认「打开」；或到**系统设置 → 隐私与安全性 → 仍要打开**。
+- 或用命令显式清除下载标记：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Master Cleaner.app"
+```
+
+**原因：** `com.apple.quarantine` 是 macOS 给来自网络的下载文件打的标记，只有该标记存在时 Gatekeeper 才会执行公证校验。删除标记相当于告诉系统「这份应用已在本地受信任」，启动便不再被拦截。签名本身不会被修改——应用依然没有经过公证，也不代表适合对外分发。
+
+**只对这一个应用执行。** `xattr -dr com.apple.quarantine /Applications/` 会清掉机器上所有应用的隔离标记，等于长期关闭 Gatekeeper 的一道系统防线。清除标记同时也是信任决定：只对本项目官方 Releases 下载的包这样做。
+
+用 `npm run install:mac` 安装的本地构建是从 `release/` 复制过来的、不是下载的，不会带 quarantine 标记，也不需要这一步；之后如果重新从 `.dmg`/`.zip` 下载或复制应用，标记会重新出现。
+
 ## 多语言
 
 界面、CLI 输出与扫描条目均支持中英双语，**默认跟随系统语言**。解析顺序：
